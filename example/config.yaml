@@ -1,0 +1,14 @@
+geoserver:
+  url: http://localhost/geoserver
+  username: admin
+  password: geoserver
+  workspace: 'sample_workspace'
+datastore:
+  host: localhost
+  port: 5432
+  database: gis_data
+  username: db_user
+  password: db_pass
+  name: geoserver_datastore
+source:
+  path: /xx/xx/xx/x.gpkg
