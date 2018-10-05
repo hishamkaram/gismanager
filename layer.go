@@ -3,6 +3,7 @@ package gismanager
 import (
 	"fmt"
 
+	gsconfig "github.com/hishamkaram/geoserver"
 	"github.com/lukeroth/gdal"
 )
 
@@ -18,9 +19,35 @@ type LayerField struct {
 }
 
 //LayerToPostgis Layer to Postgis
-func (layer *GdalLayer) LayerToPostgis(targetSource gdal.DataSource) (newLayer *GdalLayer) {
+func (layer *GdalLayer) LayerToPostgis(targetSource gdal.DataSource, manager *ManagerConfig) (newLayer *GdalLayer) {
+	catalog := gsconfig.GetCatalog(manager.Geoserver.ServerURL, manager.Geoserver.Username, manager.Geoserver.Password)
+	storeExits, datastoreErr := catalog.DatastoreExists(manager.Geoserver.WorkspaceName, manager.Datastore.Name, true)
+	if datastoreErr != nil {
+		manager.logger.Error(datastoreErr)
+		return
+	}
+	if !storeExits {
+		datastoreConnection := gsconfig.DatastoreConnection{
+			Name:   manager.Datastore.Name,
+			Host:   manager.Datastore.Host,
+			Port:   int(manager.Datastore.Port),
+			DBName: manager.Datastore.DBName,
+			DBUser: manager.Datastore.DBUser,
+			DBPass: manager.Datastore.DBPass,
+		}
+		created, createErr := catalog.CreateDatastore(datastoreConnection, manager.Geoserver.WorkspaceName)
+		if createErr != nil || !created {
+			manager.logger.Error(createErr)
+			return
+		}
+	}
 	if layer.Layer != nil {
-		_layer := targetSource.CopyLayer(*layer.Layer, layer.Name(), []string{fmt.Sprintf("GEOMETRY_NAME=%s", layer.GeometryColumn())})
+		var options []string
+		geomName := layer.GeometryColumn()
+		if geomName != "" {
+			options = append(options, fmt.Sprintf("GEOMETRY_NAME=%s", layer.GeometryColumn()))
+		}
+		_layer := targetSource.CopyLayer(*layer.Layer, layer.Name(), options)
 		newLayer = &GdalLayer{
 			Layer: &_layer,
 		}
@@ -57,8 +84,8 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	return
 }
 
-//GetFeature Get Layer Features
-func (layer *GdalLayer) GetFeature() (features []*gdal.Feature) {
+//GetFeatures Get Layer Features
+func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 	if layer.Layer != nil {
 		count, ok := layer.Layer.FeatureCount(true)
 		if !ok {

@@ -30,7 +30,7 @@ func main() {
 			gLayer := gismanager.GdalLayer{
 				Layer: &layer,
 			}
-			if newLayer := gLayer.LayerToPostgis(targetSource); newLayer.Layer != nil {
+			if newLayer := gLayer.LayerToPostgis(targetSource, manager); newLayer.Layer != nil {
 				ok, pubErr := manager.PublishGeoserverLayer(newLayer)
 				if pubErr != nil {
 					logger.Error(pubErr)

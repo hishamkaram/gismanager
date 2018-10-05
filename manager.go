@@ -72,7 +72,7 @@ func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err
 		case ".shp", ".zip":
 			driver = gdal.OGRDriverByName(shapeFileDriver)
 			break
-		case ".json":
+		case ".json", ".geojson":
 			driver = gdal.OGRDriverByName(geoJSONDriver)
 			break
 		case ".kml":
