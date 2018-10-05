@@ -1,2 +1,2 @@
 # GISManager
-Publish Your GIS Data to PostGIS and Geoserver
+Publish Your GIS Data(Vector Data) to PostGIS and Geoserver
