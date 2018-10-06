@@ -55,14 +55,14 @@ func (layer *GdalLayer) LayerToPostgis(targetSource gdal.DataSource, manager *Ma
 	return
 }
 
-//GetGeomtryName Get Geometry Name
+//GetGeomtryName Get Geometry Name point/line/....etc
 func (layer *GdalLayer) GetGeomtryName() (geometryName string) {
 	geom := gdal.Create(layer.Layer.Type())
 	geometryName = geom.Name()
 	return
 }
 
-//GetLayerSchema Get Layer Schema
+//GetLayerSchema return slice of layer fields
 func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	if layer.Layer != nil {
 		layerDef := layer.Layer.Definition()
@@ -84,7 +84,7 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	return
 }
 
-//GetFeatures Get Layer Features
+//GetFeatures return layer features
 func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 	if layer.Layer != nil {
 		count, ok := layer.Layer.FeatureCount(true)

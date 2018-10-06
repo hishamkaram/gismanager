@@ -11,6 +11,7 @@ type datastore struct {
 	Name   string `yaml:"name"`
 }
 
+//BuildConnectionString return postgres connection as string
 func (ds *datastore) BuildConnectionString() string {
 	return fmt.Sprintf("PG: host=%s port=%d dbname=%s user=%s password=%s", ds.Host, ds.Port, ds.DBName, ds.DBUser, ds.DBPass)
 }

@@ -50,7 +50,7 @@ func (manager *ManagerConfig) PublishGeoserverLayer(layer *GdalLayer) (ok bool, 
 	return
 }
 
-//OpenSource open Datasource
+//OpenSource open data source from path
 func (manager *ManagerConfig) OpenSource(path string, access int) (source gdal.DataSource, ok bool) {
 	driver, err := manager.GetDriver(path)
 	if err != nil {
@@ -60,7 +60,7 @@ func (manager *ManagerConfig) OpenSource(path string, access int) (source gdal.D
 	return
 }
 
-//GetDriver open Datasource
+//GetDriver return the proper driver based on file path
 func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err error) {
 	if pgRegex.MatchString(path) {
 		driver = gdal.OGRDriverByName(postgreSQLDriver)
