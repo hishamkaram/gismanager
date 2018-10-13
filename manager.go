@@ -35,28 +35,17 @@ func (manager *ManagerConfig) GetGeoserverCatalog() *gsconfig.GeoServer {
 	return gsCatalog
 }
 
-//PublishGeoserverLayer publish Layer to postgis
-func (manager *ManagerConfig) PublishGeoserverLayer(layer *GdalLayer) (ok bool, err error) {
-	if layer != nil {
-		gsCatalog := manager.GetGeoserverCatalog()
-		exists, storeErr := gsCatalog.DatastoreExists(manager.Geoserver.WorkspaceName, manager.Datastore.Name, true)
-		if storeErr != nil {
-			err = storeErr
-		}
-		if exists {
-			ok, err = gsCatalog.PublishPostgisLayer(manager.Geoserver.WorkspaceName, manager.Datastore.Name, layer.Name(), layer.Name())
-		}
-	}
-	return
-}
-
 //OpenSource open data source from path
-func (manager *ManagerConfig) OpenSource(path string, access int) (source gdal.DataSource, ok bool) {
+func (manager *ManagerConfig) OpenSource(path string, access int) (source *gdal.DataSource, ok bool) {
 	driver, err := manager.GetDriver(path)
 	if err != nil {
-		panic(err)
+		manager.logger.Error(err)
+		ok = false
+		return
 	}
-	source, ok = driver.Open(path, access)
+	targetSource, success := driver.Open(path, access)
+	source = &targetSource
+	ok = success
 	return
 }
 

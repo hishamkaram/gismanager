@@ -1,0 +1,27 @@
+version: '3'
+
+services:
+  geoserver:
+    image: cartoview/geoserver_docker:tomcat
+    restart: unless-stopped
+    hostname: geoserver
+    build:
+      context: ./
+      dockerfile: docker/Dockerfile
+    user: root
+    ports:
+      - "8080:8080"
+  postgis:
+    image: kartoza/postgis:10.0-2.4
+    volumes:
+      - 'postgis-data:/var/lib/postgresql'
+    environment:
+      - POSTGRES_DB=gis
+      - POSTGRES_USER=golang
+      - POSTGRES_PASS=golang
+      - ALLOW_IP_RANGE=0.0.0.0/0
+    ports:
+      - 5432:5432
+    restart: unless-stopped
+volumes:
+  postgis-data:

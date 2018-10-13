@@ -1,6 +1,7 @@
 package gismanager
 
 import (
+	"errors"
 	"fmt"
 
 	gsconfig "github.com/hishamkaram/geoserver"
@@ -18,39 +19,62 @@ type LayerField struct {
 	Type string
 }
 
-//LayerToPostgis Layer to Postgis
-func (layer *GdalLayer) LayerToPostgis(targetSource gdal.DataSource, manager *ManagerConfig) (newLayer *GdalLayer) {
-	catalog := gsconfig.GetCatalog(manager.Geoserver.ServerURL, manager.Geoserver.Username, manager.Geoserver.Password)
-	storeExits, datastoreErr := catalog.DatastoreExists(manager.Geoserver.WorkspaceName, manager.Datastore.Name, true)
-	if datastoreErr != nil {
-		manager.logger.Error(datastoreErr)
-		return
+//PublishGeoserverLayer publish Layer to postgis
+func (manager *ManagerConfig) PublishGeoserverLayer(layer *GdalLayer) (ok bool, err error) {
+	catalog := manager.GetGeoserverCatalog()
+	workspaceExists, _ := catalog.WorkspaceExists(manager.Geoserver.WorkspaceName)
+	if !workspaceExists {
+		workspaceCreated, workspaceCreateErr := catalog.CreateWorkspace(manager.Geoserver.WorkspaceName)
+		if workspaceCreateErr != nil || !workspaceCreated {
+			manager.logger.Error(workspaceCreateErr)
+			err = workspaceCreateErr
+			return
+		}
 	}
+	storeExits, _ := catalog.DatastoreExists(manager.Geoserver.WorkspaceName, manager.Datastore.Name, true)
 	if !storeExits {
 		datastoreConnection := gsconfig.DatastoreConnection{
 			Name:   manager.Datastore.Name,
 			Host:   manager.Datastore.Host,
 			Port:   int(manager.Datastore.Port),
 			DBName: manager.Datastore.DBName,
+			Type:   "postgis",
 			DBUser: manager.Datastore.DBUser,
 			DBPass: manager.Datastore.DBPass,
 		}
 		created, createErr := catalog.CreateDatastore(datastoreConnection, manager.Geoserver.WorkspaceName)
 		if createErr != nil || !created {
 			manager.logger.Error(createErr)
+			err = createErr
 			return
 		}
 	}
-	if layer.Layer != nil {
-		var options []string
-		geomName := layer.GeometryColumn()
-		if geomName != "" {
-			options = append(options, fmt.Sprintf("GEOMETRY_NAME=%s", layer.GeometryColumn()))
-		}
-		_layer := targetSource.CopyLayer(*layer.Layer, layer.Name(), options)
-		newLayer = &GdalLayer{
-			Layer: &_layer,
-		}
+	ok, err = catalog.PublishPostgisLayer(manager.Geoserver.WorkspaceName, manager.Datastore.Name, layer.Name(), layer.Name())
+	return
+}
+
+//LayerToPostgis add Layer to Postgis
+func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *ManagerConfig, overwrite bool) (newLayer *GdalLayer, err error) {
+	if targetSource == nil {
+		err = errors.New("Invalid Datasource")
+		return
+	}
+	if layer.Layer == nil {
+		err = errors.New("Invalid Layer")
+		return
+	}
+	datasource := *targetSource
+	var options []string
+	geomName := layer.GeometryColumn()
+	if geomName != "" {
+		options = append(options, fmt.Sprintf("GEOMETRY_NAME=%s", layer.GeometryColumn()))
+	}
+	if overwrite {
+		options = append(options, "OVERWRITE=YES")
+	}
+	_layer := datasource.CopyLayer(*layer.Layer, layer.Name(), options)
+	newLayer = &GdalLayer{
+		Layer: &_layer,
 	}
 	return
 }
@@ -86,11 +110,13 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 
 //GetFeatures return layer features
 func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
+	logger := GetLogger()
 	if layer.Layer != nil {
 		count, ok := layer.Layer.FeatureCount(true)
 		if !ok {
-
+			logger.Error("Could not read features")
 		} else {
+			logger.Infof("We Found %d Feature", count)
 			for index := 0; index < count; index++ {
 				f := layer.Layer.Feature(index)
 				features = append(features, &f)

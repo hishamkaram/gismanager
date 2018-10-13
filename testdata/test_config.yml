@@ -1,0 +1,14 @@
+geoserver:
+  url: http://localhost:8080/geoserver
+  username: admin
+  password: geoserver
+  workspace: golang
+datastore:
+  host: postgis
+  port: 5432
+  database: gis
+  username: golang
+  password: golang
+  name: gismanager_data
+source:
+  path: ./testdata

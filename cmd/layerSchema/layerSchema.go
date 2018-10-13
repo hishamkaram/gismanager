@@ -22,15 +22,19 @@ func main() {
 	if confErr != nil {
 		panic(confErr)
 	}
-	source, ok := manager.OpenSource(manager.Source.Path, 0)
-	if ok {
-		for index := 0; index < source.LayerCount(); index++ {
-			layer := source.LayerByIndex(index)
-			gLayer := gismanager.GdalLayer{
-				Layer: &layer,
-			}
-			for _, f := range gLayer.GetLayerSchema() {
-				fmt.Printf("\n%+v\n", *f)
+	files, _ := gismanager.GetGISFiles(manager.Source.Path)
+	for _, file := range files {
+		source, ok := manager.OpenSource(file, 0)
+		if ok {
+			for index := 0; index < source.LayerCount(); index++ {
+				layer := source.LayerByIndex(index)
+				gLayer := gismanager.GdalLayer{
+					Layer: &layer,
+				}
+				fmt.Println(layer.Name())
+				for _, f := range gLayer.GetLayerSchema() {
+					fmt.Printf("\n%+v\n", *f)
+				}
 			}
 		}
 	}

@@ -14,7 +14,8 @@ import (
 func FromConfig(configFile string) (config *ManagerConfig, err error) {
 	gpkgConfig := ManagerConfig{}
 	gpkgConfig.logger = GetLogger()
-	yamlFile, err := ioutil.ReadFile(configFile)
+	path, _ := filepath.Abs(configFile)
+	yamlFile, err := ioutil.ReadFile(path)
 	if err != nil {
 		gpkgConfig.logger.Errorf("yamlFile.Get err   %v ", err)
 		return
@@ -38,13 +39,14 @@ func isSupported(ext string) bool {
 
 //GetGISFiles retrun List of All GIS Files in this path
 func GetGISFiles(root string) ([]string, error) {
+	root, _ = filepath.Abs(root)
 	var files []string
 	fileInfo, statErr := os.Stat(root)
 	if statErr != nil {
 		return files, statErr
 	}
 	if !fileInfo.IsDir() {
-		files = append(files, fileInfo.Name())
+		files = append(files, path.Join(root, fileInfo.Name()))
 		return files, nil
 	}
 	dirInfo, err := ioutil.ReadDir(root)
@@ -60,7 +62,7 @@ func GetGISFiles(root string) ([]string, error) {
 		} else {
 			extension := strings.ToLower(filepath.Ext(file.Name()))
 			if isSupported(extension) {
-				files = append(files, file.Name())
+				files = append(files, path.Join(root, file.Name()))
 			}
 		}
 	}

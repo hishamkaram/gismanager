@@ -3,7 +3,7 @@ package gismanager
 import "regexp"
 
 var pgRegex = regexp.MustCompile(`^\s?PG:\s?.*$`)
-var supportedEXT = []string{".zip", ".json", ".geojson", ".gdb", "kml", ".shp"}
+var supportedEXT = []string{".zip", ".json", ".gpkg", ".geojson", ".gdb", "kml", ".shp"}
 
 const (
 	geopackageDriver  = "GPKG"

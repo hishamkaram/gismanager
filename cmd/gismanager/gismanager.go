@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/hishamkaram/gismanager"
@@ -22,26 +23,30 @@ func main() {
 	if confErr != nil {
 		panic(confErr)
 	}
-	source, ok := manager.OpenSource(manager.Source.Path, 0)
-	targetSource, targetOK := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
-	if ok && targetOK {
-		for index := 0; index < source.LayerCount(); index++ {
-			layer := source.LayerByIndex(index)
-			gLayer := gismanager.GdalLayer{
-				Layer: &layer,
-			}
-			if newLayer := gLayer.LayerToPostgis(targetSource, manager); newLayer.Layer != nil {
-				ok, pubErr := manager.PublishGeoserverLayer(newLayer)
-				if pubErr != nil {
-					logger.Error(pubErr)
+	files, _ := gismanager.GetGISFiles(manager.Source.Path)
+	fmt.Println(files)
+	for _, file := range files {
+		source, ok := manager.OpenSource(file, 0)
+		targetSource, targetOK := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
+		if ok && targetOK {
+			for index := 0; index < source.LayerCount(); index++ {
+				layer := source.LayerByIndex(index)
+				gLayer := gismanager.GdalLayer{
+					Layer: &layer,
 				}
-				if !ok {
-					logger.Error("Failed to Publish")
-				} else {
-					logger.Info("published")
+				if newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true); newLayer.Layer != nil || postgisErr != nil {
+					ok, pubErr := manager.PublishGeoserverLayer(newLayer)
+					if pubErr != nil {
+						logger.Error(pubErr)
+					}
+					if !ok {
+						logger.Error("Failed to Publish")
+					} else {
+						logger.Info("published")
+					}
 				}
-			}
 
+			}
 		}
 	}
 }
