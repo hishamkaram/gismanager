@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	//postgres Driver
 	_ "github.com/lib/pq"
 	yaml "gopkg.in/yaml.v2"
 )
