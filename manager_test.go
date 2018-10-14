@@ -12,9 +12,9 @@ func TestFromConfig(t *testing.T) {
 	assert.Nil(t, confErr)
 	assert.NotNil(t, manager)
 	expected := ManagerConfig{
-		Geoserver: geoserver{WorkspaceName: "golang", Username: "admin", Password: "geoserver", ServerURL: "http://localhost:8080/geoserver"},
-		Datastore: datastore{Host: "localhost", Port: 5432, DBName: "gis", DBUser: "golang", DBPass: "golang", Name: "gismanager_data"},
-		Source:    source{Path: "./testdata"},
+		Geoserver: GeoserverConfig{WorkspaceName: "golang", Username: "admin", Password: "geoserver", ServerURL: "http://localhost:8080/geoserver"},
+		Datastore: DatastoreConfig{Host: "localhost", Port: 5432, DBName: "gis", DBUser: "golang", DBPass: "golang", Name: "gismanager_data"},
+		Source:    SourceConfig{Path: "./testdata"},
 		logger:    manager.logger,
 	}
 	assert.Equal(t, expected.Geoserver, manager.Geoserver)

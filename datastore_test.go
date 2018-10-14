@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildConnectionString(t *testing.T) {
-	ds := datastore{
+	ds := DatastoreConfig{
 		Host:   "localhost",
 		Port:   5432,
 		DBName: "gis",

@@ -10,22 +10,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type geoserver struct {
+//GeoserverConfig geoserver configuration
+type GeoserverConfig struct {
 	WorkspaceName string `yaml:"workspace"`
 	ServerURL     string `yaml:"url"`
 	Username      string `yaml:"username"`
 	Password      string `yaml:"password"`
 }
 
-type source struct {
+//SourceConfig Data Source/Dir configuration
+type SourceConfig struct {
 	Path string `yaml:"path"`
 }
 
 //ManagerConfig is the configuration Object
 type ManagerConfig struct {
-	Geoserver geoserver `yaml:"geoserver"`
-	Datastore datastore `yaml:"datastore"`
-	Source    source    `yaml:"source"`
+	Geoserver GeoserverConfig `yaml:"geoserver"`
+	Datastore DatastoreConfig `yaml:"datastore"`
+	Source    SourceConfig    `yaml:"source"`
 	logger    *logrus.Logger
 }
 
