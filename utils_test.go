@@ -32,4 +32,7 @@ func TestDBIsAlive(t *testing.T) {
 	connStr = "mysql://"
 	err := DBIsAlive("mysql", connStr)
 	assert.NotNil(t, err)
+	connStr = "postgresql://dummy:dummy@localhost:5438/dummy_db?sslmode=disable"
+	pingErr := DBIsAlive("postgres", connStr)
+	assert.NotNil(t, pingErr)
 }
