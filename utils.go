@@ -73,8 +73,8 @@ func GetGISFiles(root string) ([]string, error) {
 }
 
 //DBIsAlive check if database alive
-func DBIsAlive(connectionStr string) (err error) {
-	db, dbErr := sql.Open("postgres", connectionStr)
+func DBIsAlive(dbType string, connectionStr string) (err error) {
+	db, dbErr := sql.Open(dbType, connectionStr)
 	if dbErr != nil {
 		err = dbErr
 		return

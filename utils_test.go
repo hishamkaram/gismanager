@@ -27,9 +27,9 @@ func TestGetGISFiles(t *testing.T) {
 func TestDBIsAlive(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")
 	connStr := manager.Datastore.PostgresConnectionString()
-	dbErr := DBIsAlive(connStr)
+	dbErr := DBIsAlive("postgres", connStr)
 	assert.Nil(t, dbErr)
-	connStr = "xxxxx"
-	err := DBIsAlive(connStr)
+	connStr = "mysql://"
+	err := DBIsAlive("mysql", connStr)
 	assert.NotNil(t, err)
 }
