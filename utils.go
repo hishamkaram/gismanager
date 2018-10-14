@@ -1,12 +1,14 @@
 package gismanager
 
 import (
+	"database/sql"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	_ "github.com/lib/pq"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -68,4 +70,19 @@ func GetGISFiles(root string) ([]string, error) {
 	}
 
 	return files, nil
+}
+
+//DBIsAlive check if database alive
+func DBIsAlive(connectionStr string) (err error) {
+	db, dbErr := sql.Open("postgres", connectionStr)
+	if dbErr != nil {
+		err = dbErr
+		return
+	}
+	if pingErr := db.Ping(); pingErr != nil {
+		db.Close()
+		err = pingErr
+		return
+	}
+	return
 }

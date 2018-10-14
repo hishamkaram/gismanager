@@ -24,3 +24,12 @@ func TestGetGISFiles(t *testing.T) {
 	assert.Equal(t, 0, len(dummyFiles))
 	assert.NotNil(t, dummyFileserr)
 }
+func TestDBIsAlive(t *testing.T) {
+	manager, _ := FromConfig("./testdata/test_config.yml")
+	connStr := manager.Datastore.PostgresConnectionString()
+	dbErr := DBIsAlive(connStr)
+	assert.Nil(t, dbErr)
+	connStr = "xxxxx"
+	err := DBIsAlive(connStr)
+	assert.NotNil(t, err)
+}

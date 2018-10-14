@@ -55,6 +55,12 @@ func (manager *ManagerConfig) PublishGeoserverLayer(layer *GdalLayer) (ok bool, 
 
 //LayerToPostgis add Layer to Postgis
 func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *ManagerConfig, overwrite bool) (newLayer *GdalLayer, err error) {
+	connStr := manager.Datastore.PostgresConnectionString()
+	dbErr := DBIsAlive(connStr)
+	if dbErr != nil {
+		err = dbErr
+		return
+	}
 	if targetSource == nil {
 		err = errors.New("Invalid Datasource")
 		return
