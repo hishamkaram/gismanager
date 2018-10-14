@@ -96,8 +96,12 @@ func (layer *GdalLayer) GetGeomtryName() (geometryName string) {
 func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	if layer.Layer != nil {
 		layerDef := layer.Layer.Definition()
+		geomName := layer.Layer.GeometryColumn()
+		if len(geomName) == 0 {
+			geomName = "geom"
+		}
 		geomField := LayerField{
-			Name: layer.Layer.GeometryColumn(),
+			Name: geomName,
 			Type: layer.GetGeomtryName(),
 		}
 		fields = append(fields, &geomField)
