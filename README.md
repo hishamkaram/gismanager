@@ -1,3 +1,4 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/hishamkaram/gismanager)](https://goreportcard.com/report/github.com/hishamkaram/gismanager)
 [![GitHub license](https://img.shields.io/github/license/hishamkaram/gismanager.svg)](https://github.com/hishamkaram/gismanager/blob/master/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/hishamkaram/gismanager.svg)](https://github.com/hishamkaram/gismanager/issues)
 [![Coverage Status](https://coveralls.io/repos/github/hishamkaram/gismanager/badge.svg?branch=master&service=github)](https://coveralls.io/github/hishamkaram/gismanager?branch=master&service=github)
