@@ -187,5 +187,4 @@ Publish Your GIS Data(Vector Data) to PostGIS and Geoserver
  ---
  
 # Todo:
-  - [ ] Handle zipped shapefiles
   - [ ] backup postgis as geopackage
