@@ -1,6 +1,7 @@
 package gismanager
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,11 +12,34 @@ func TestIsSupported(t *testing.T) {
 	assert.True(t, ok)
 	fail := isSupported(".tiff")
 	assert.False(t, fail)
+	zippedTest := isSupported(".zip")
+	assert.True(t, zippedTest)
 
+}
+func TestZippedShapeFile(t *testing.T) {
+	newDir, _ := ioutil.TempDir("", "zipped_shapeFile")
+	unzipErr := zippedShapeFile("./testdata/faults.zip", newDir)
+	assert.Nil(t, unzipErr)
+	dummyErr := zippedShapeFile("./testdata/faults_ss.zip", newDir)
+	assert.NotNil(t, dummyErr)
+	dirErr := zippedShapeFile("./testdata/", newDir)
+	assert.NotNil(t, dirErr)
+}
+func TestPreprocessFile(t *testing.T) {
+	finalPath, preProcessErr := preprocessFile("./testdata/faults.zip", "")
+	assert.NotNil(t, finalPath)
+	assert.NotEqual(t, "", finalPath)
+	assert.Nil(t, preProcessErr)
+	errFinalPath, err := preprocessFile("./testdata/dummy.zip", "")
+	assert.Equal(t, "", errFinalPath)
+	assert.NotNil(t, err)
+	emptyFinalPath, emptyErr := preprocessFile("./testdata/faults_empty.zip", "")
+	assert.Equal(t, "", emptyFinalPath)
+	assert.NotNil(t, emptyErr)
 }
 func TestGetGISFiles(t *testing.T) {
 	files, err := GetGISFiles("./testdata")
-	assert.Equal(t, 3, len(files))
+	assert.Equal(t, 4, len(files))
 	assert.Nil(t, err)
 	noDir, NoDirerr := GetGISFiles("./testdata/sample.gpkg")
 	assert.Equal(t, 1, len(noDir))

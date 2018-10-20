@@ -2,11 +2,15 @@ package gismanager
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/mholt/archiver"
 
 	//postgres Driver
 	_ "github.com/lib/pq"
@@ -49,7 +53,15 @@ func GetGISFiles(root string) ([]string, error) {
 		return files, statErr
 	}
 	if !fileInfo.IsDir() {
-		files = append(files, path.Join(root, fileInfo.Name()))
+		extension := strings.ToLower(filepath.Ext(fileInfo.Name()))
+		if isSupported(extension) {
+			finalPath, preProcessErr := preprocessFile(root, "")
+			if preProcessErr != nil {
+				return files, preProcessErr
+			}
+			files = append(files, finalPath)
+			return files, nil
+		}
 		return files, nil
 	}
 	dirInfo, err := ioutil.ReadDir(root)
@@ -57,19 +69,11 @@ func GetGISFiles(root string) ([]string, error) {
 		return files, err
 	}
 	for _, file := range dirInfo {
-		if file.IsDir() {
-			subFiles, subErr := GetGISFiles(path.Join(root, file.Name()))
-			if subErr == nil {
-				files = append(files, subFiles...)
-			}
-		} else {
-			extension := strings.ToLower(filepath.Ext(file.Name()))
-			if isSupported(extension) {
-				files = append(files, path.Join(root, file.Name()))
-			}
+		subFiles, subErr := GetGISFiles(path.Join(root, file.Name()))
+		if subErr == nil {
+			files = append(files, subFiles...)
 		}
 	}
-
 	return files, nil
 }
 
@@ -84,6 +88,54 @@ func DBIsAlive(dbType string, connectionStr string) (err error) {
 		db.Close()
 		err = pingErr
 		return
+	}
+	return
+}
+func zippedShapeFile(zippedPath string, destPath string) (err error) {
+	fileInfo, statErr := os.Stat(zippedPath)
+	if statErr != nil || os.IsNotExist(statErr) {
+		err = statErr
+		return
+	}
+	if fileInfo.IsDir() {
+		err = errors.New("zippedPath must be file not a directory")
+		return
+	}
+	err = archiver.Zip.Open(zippedPath, destPath)
+	return
+}
+func preprocessFile(filePath string, tempPath string) (finalPath string, err error) {
+	logger := GetLogger()
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".zip":
+		newDir, tempDirErr := ioutil.TempDir(tempPath, "zipped_shapeFile")
+		fmt.Println(newDir)
+		if tempDirErr != nil {
+			logger.Error(tempDirErr)
+			err = tempDirErr
+			break
+		}
+		unzipErr := zippedShapeFile(filePath, newDir)
+		if unzipErr != nil {
+			logger.Error(unzipErr)
+			err = unzipErr
+			break
+		}
+		files, filesErr := GetGISFiles(newDir)
+		if filesErr != nil {
+			logger.Error(filesErr)
+			err = filesErr
+			break
+		}
+		if len(files) == 0 {
+			err = errors.New("cannot find gis files")
+			break
+		}
+		finalPath = files[0]
+		break
+	default:
+		finalPath = filePath
 	}
 	return
 }
