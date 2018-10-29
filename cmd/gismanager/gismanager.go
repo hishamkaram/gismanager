@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/hishamkaram/gismanager"
@@ -24,7 +23,6 @@ func main() {
 		panic(confErr)
 	}
 	files, _ := gismanager.GetGISFiles(manager.Source.Path)
-	fmt.Println(files)
 	for _, file := range files {
 		source, ok := manager.OpenSource(file, 0)
 		targetSource, targetOK := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
