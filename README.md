@@ -22,6 +22,14 @@ Publish Your GIS Data(Vector Data) to PostGIS and Geoserver
 - How to install:
     - `go get -v github.com/hishamkaram/gismanager`
 - Usage:
+  - `testdata` folder content:
+    ```
+    ./testdata/
+    ├── neighborhood_names_gis.geojson
+    ├── nested
+    │   └── nyc_wi-fi_hotspot_locations.geojson
+    ├── sample.gpkg
+    ```
   - create `ManagerConfig` instance:
     ```
     manager:= gismanager.ManagerConfig{
@@ -30,14 +38,6 @@ Publish Your GIS Data(Vector Data) to PostGIS and Geoserver
       Source:    gismanager.SourceConfig{Path: "./testdata"},
       logger:    gismanager.GetLogger(),
     }
-    ```
-  - `testdata` folder content:
-    ```
-    ./testdata/
-    ├── neighborhood_names_gis.geojson
-    ├── nested
-    │   └── nyc_wi-fi_hotspot_locations.geojson
-    ├── sample.gpkg
     ```
   - get Supported GIS Files:
     ```
