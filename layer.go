@@ -13,13 +13,13 @@ type GdalLayer struct {
 	*gdal.Layer
 }
 
-//LayerField Field
+//LayerField Layer Field
 type LayerField struct {
 	Name string
 	Type string
 }
 
-//PublishGeoserverLayer publish Layer to postgis
+//PublishGeoserverLayer Publish Layer to Geoserver instance
 func (manager *ManagerConfig) PublishGeoserverLayer(layer *GdalLayer) (ok bool, err error) {
 	catalog := manager.GetGeoserverCatalog()
 	workspaceExists, _ := catalog.WorkspaceExists(manager.Geoserver.WorkspaceName)
@@ -89,6 +89,9 @@ func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *M
 func (layer *GdalLayer) GetGeomtryName() (geometryName string) {
 	geom := gdal.Create(layer.Layer.Type())
 	geometryName = geom.Name()
+	if len(geometryName) == 0 {
+		geometryName = "geom"
+	}
 	return
 }
 
@@ -97,9 +100,6 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	if layer.Layer != nil {
 		layerDef := layer.Layer.Definition()
 		geomName := layer.Layer.GeometryColumn()
-		if len(geomName) == 0 {
-			geomName = "geom"
-		}
 		geomField := LayerField{
 			Name: geomName,
 			Type: layer.GetGeomtryName(),

@@ -17,7 +17,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-//FromConfig load geoserver config from yaml file
+//FromConfig load GIS Manager config from yaml file
 func FromConfig(configFile string) (config *ManagerConfig, err error) {
 	gpkgConfig := ManagerConfig{}
 	gpkgConfig.logger = GetLogger()

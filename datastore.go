@@ -2,6 +2,7 @@ package gismanager
 
 import "fmt"
 
+//DatastoreConfig configuration
 type DatastoreConfig struct {
 	Host   string `yaml:"host"`
 	Port   uint   `yaml:"port"`
@@ -11,7 +12,7 @@ type DatastoreConfig struct {
 	Name   string `yaml:"name"`
 }
 
-//BuildConnectionString return gdal postgres connection as string
+//BuildConnectionString return GDAL postgres connection as string
 func (ds *DatastoreConfig) BuildConnectionString() string {
 	return fmt.Sprintf("PG: host=%s port=%d dbname=%s user=%s password=%s", ds.Host, ds.Port, ds.DBName, ds.DBUser, ds.DBPass)
 }

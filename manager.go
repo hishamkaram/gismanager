@@ -31,13 +31,13 @@ type ManagerConfig struct {
 	logger    *logrus.Logger
 }
 
-//GetGeoserverCatalog publish return geoserver Catalog
+//GetGeoserverCatalog return geoserver Catalog instance to deal with geoserver
 func (manager *ManagerConfig) GetGeoserverCatalog() *gsconfig.GeoServer {
 	gsCatalog := gsconfig.GetCatalog(manager.Geoserver.ServerURL, manager.Geoserver.Username, manager.Geoserver.Password)
 	return gsCatalog
 }
 
-//OpenSource open data source from path
+//OpenSource open data source from a given Path and access permission 0/1
 func (manager *ManagerConfig) OpenSource(path string, access int) (source *gdal.DataSource, ok bool) {
 	driver, err := manager.GetDriver(path)
 	if err != nil {
@@ -51,7 +51,7 @@ func (manager *ManagerConfig) OpenSource(path string, access int) (source *gdal.
 	return
 }
 
-//GetDriver return the proper driver based on file path
+//GetDriver return the proper driver based on file path/database connection
 func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err error) {
 	if pgRegex.MatchString(path) {
 		driver = gdal.OGRDriverByName(postgreSQLDriver)
