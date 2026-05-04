@@ -1,7 +1,7 @@
 package gismanager
 
 import (
-	"reflect"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +10,5 @@ import (
 func TestGetLogger(t *testing.T) {
 	logger := GetLogger()
 	assert.NotNil(t, logger)
-	assert.Equal(t, reflect.TypeOf(logger).String(), "*logrus.Logger")
-
+	assert.IsType(t, &slog.Logger{}, logger)
 }
