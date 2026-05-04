@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"log/slog"
 
 	geoserver "github.com/hishamkaram/geoserver/v2"
@@ -216,6 +217,11 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 
 // GetFeatures returns every feature in the layer, materialized into a slice.
 // Features are read in OGR-FID order. Returns nil if FeatureCount fails.
+//
+// Deprecated: leaks gdal.Feature handles — each feature in the returned
+// slice owns a C-level handle that must be released via [gdal.Feature.Destroy],
+// which the slice form makes easy to forget. Use [(*GdalLayer).Features]
+// which destroys each feature as iteration advances and on early break.
 func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 	logger := layer.loggerOrDefault()
 	if layer.Layer != nil {
@@ -231,4 +237,43 @@ func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 		}
 	}
 	return
+}
+
+// Features returns an iterator over every feature in the layer. Features
+// are emitted in OGR-FID order, and each feature is destroyed via
+// [gdal.Feature.Destroy] as the iteration advances — so the caller never
+// has to remember to free a handle. The cleanup also runs on early break:
+// the still-yielded feature is destroyed when the for-range loop exits,
+// regardless of why.
+//
+// ctx is honored between feature reads — if it is canceled mid-iteration,
+// the iterator stops cleanly (and the deferred destroy still runs).
+//
+// Returns an empty iteration if the embedded *gdal.Layer is nil or
+// FeatureCount fails (the manager's logger gets an Error record in the
+// FeatureCount-failure case).
+func (layer *GdalLayer) Features(ctx context.Context) iter.Seq[gdal.Feature] {
+	logger := layer.loggerOrDefault()
+	return func(yield func(gdal.Feature) bool) {
+		if layer == nil || layer.Layer == nil {
+			return
+		}
+		count, ok := layer.FeatureCount(true)
+		if !ok {
+			logger.Error("could not read features")
+			return
+		}
+		logger.Info("read features", "count", count)
+		for i := 0; i < count; i++ {
+			if err := ctx.Err(); err != nil {
+				return
+			}
+			f := layer.Feature(int64(i))
+			keepGoing := yield(f)
+			f.Destroy()
+			if !keepGoing {
+				return
+			}
+		}
+	}
 }

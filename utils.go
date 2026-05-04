@@ -105,16 +105,25 @@ func getGISFiles(root string, logger *slog.Logger) ([]string, error) {
 // DBIsAlive opens a database/sql connection and pings it. Returns a
 // non-nil error if either step fails.
 //
-// TODO(PR 4): take a context.Context argument so callers can apply
-// deadlines / cancellation.
-func DBIsAlive(dbType string, connectionStr string) (err error) {
+// Deprecated: hard-codes context.Background() for the ping; callers
+// can't apply deadlines or cancellation. Use [DBIsAliveContext].
+func DBIsAlive(dbType string, connectionStr string) error {
+	return DBIsAliveContext(context.Background(), dbType, connectionStr)
+}
+
+// DBIsAliveContext opens a database/sql connection and pings it,
+// honoring ctx for cancellation and deadlines on the ping. The connection
+// is always closed before the function returns. Use this in code that
+// already has a context in scope (HTTP handlers, library calls that
+// thread a ctx, etc.).
+func DBIsAliveContext(ctx context.Context, dbType string, connectionStr string) (err error) {
 	db, dbErr := sql.Open(dbType, connectionStr)
 	if dbErr != nil {
 		err = dbErr
 		return
 	}
-	if pingErr := db.PingContext(context.Background()); pingErr != nil {
-		_ = db.Close()
+	defer func() { _ = db.Close() }()
+	if pingErr := db.PingContext(ctx); pingErr != nil {
 		err = pingErr
 		return
 	}

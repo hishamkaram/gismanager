@@ -180,25 +180,37 @@ func main() {
 
     ctx := context.Background()
 
-    // Discover GIS files under source.path.
-    files, _ := gismanager.GetGISFiles(mgr.Source.Path)
+    // Convenience: walk + load + publish in one call.
+    if err := mgr.PublishAll(ctx); err != nil { /* ... */ }
 
+    // Or stream-iterate manually for finer control:
+    for item, err := range mgr.Walk(ctx) {
+        if err != nil { continue }
+        // item.Layer is logger-stamped via NewLayer; use it freely.
+        _ = item.Layer
+    }
+
+    // Or call the low-level primitives directly (note the defer to
+    // release CGo handles — Walk / PublishAll do this automatically):
     target, err := mgr.OpenSource(ctx, mgr.Datastore.BuildConnectionString(), 1)
     if err != nil { /* ... */ }
+    defer target.Destroy()
 
-    for _, f := range files {
-        src, err := mgr.OpenSource(ctx, f, 0)
-        if err != nil { continue }
-        for i := 0; i < src.LayerCount(); i++ {
-            layer := src.LayerByIndex(i)
-            gLayer := gismanager.GdalLayer{Layer: &layer}
-            newLayer, err := gLayer.LayerToPostgis(target, mgr, true)
-            if err != nil || newLayer == nil { continue }
-            _ = mgr.PublishGeoserverLayer(ctx, newLayer)
-        }
+    src, err := mgr.OpenSource(ctx, "/path/to/file.geojson", 0)
+    if err != nil { /* ... */ }
+    defer src.Destroy()
+
+    for i := 0; i < src.LayerCount(); i++ {
+        layer := src.LayerByIndex(i)
+        wrapped := mgr.NewLayer(&layer)
+        newLayer, err := wrapped.LayerToPostgis(target, mgr, true)
+        if err != nil || newLayer == nil { continue }
+        _ = mgr.PublishGeoserverLayer(ctx, newLayer)
     }
 }
 ```
+
+> **Resource lifecycle:** `*gdal.DataSource` returned by `OpenSource` owns a CGo-side handle that must be released via `.Destroy()` to avoid leaks. `Walk` and `PublishAll` do this automatically (`defer source.Destroy()` per file). Direct callers of `OpenSource` are responsible for calling `Destroy()` themselves — the binding has no `Close()` method; `Destroy()` is the canonical release primitive in `lukeroth/gdal`.
 
 ## Version compatibility
 
