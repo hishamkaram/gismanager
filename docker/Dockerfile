@@ -22,28 +22,32 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GEOSERVER_VERSION=${GEOSERVER_VERSION} \
     JAVA_OPTS="-Xms512m -Xmx2g -XX:+UseG1GC -Djava.awt.headless=true"
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        unzip \
-    && rm -rf /var/lib/apt/lists/*
-
+# No apt-install needed: the Tomcat base image already ships curl +
+# ca-certificates, and the JDK's `jar` tool can extract the WAR archive
+# (replacing `unzip`). Skipping apt entirely removes the most common
+# transient-failure mode on GHA — the 2.27.4 leg of integration #7 lost
+# 19 minutes to `apt-get update` exit 100 from an Ubuntu mirror.
 RUN set -eux; \
     rm -rf /usr/local/tomcat/webapps/*; \
     cd /tmp; \
-    curl -fsSL --proto '=https' --tlsv1.2 -o geoserver.war.zip "${GEOSERVER_DOWNLOAD_URL}"; \
-    unzip -q geoserver.war.zip -d /tmp/geoserver; \
+    curl -fsSL --proto '=https' --tlsv1.2 \
+         --retry 5 --retry-delay 10 --retry-all-errors \
+         -o geoserver.war.zip "${GEOSERVER_DOWNLOAD_URL}"; \
+    mkdir -p /tmp/geoserver; \
+    cd /tmp/geoserver; \
+    jar -xf /tmp/geoserver.war.zip; \
     mv /tmp/geoserver/geoserver.war /usr/local/tomcat/webapps/geoserver.war; \
     rm -rf /tmp/geoserver /tmp/geoserver.war.zip
 
 # Pre-extract the WAR. Tomcat will run the unpacked form just like the WAR
-# but starts faster on subsequent runs.
+# but starts faster on subsequent runs. `jar -xf` again — no apt-installed
+# unzip needed.
 RUN set -eux; \
     cd /usr/local/tomcat/webapps; \
     mkdir geoserver; \
-    unzip -q geoserver.war -d geoserver; \
-    rm geoserver.war
+    cd geoserver; \
+    jar -xf ../geoserver.war; \
+    rm ../geoserver.war
 
 EXPOSE 8080
 
