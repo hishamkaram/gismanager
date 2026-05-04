@@ -58,15 +58,20 @@ ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}" \
     GOFLAGS="-buildvcs=false" \
     CGO_ENABLED=1
 
-# Install golangci-lint v2 and govulncheck via go install (the install.sh
-# script's checksum validation has been flaky for v2.12.1; go install is
-# the authoritative path per the golangci-lint v2 docs).
+# Install golangci-lint v2, govulncheck, and goimports via go install (the
+# install.sh script's checksum validation has been flaky for v2.12.1; go
+# install is the authoritative path per the golangci-lint v2 docs).
+# goimports lives outside golangci-lint because the project's `make fmt`
+# target shells to it directly (matching the geoserver-client convention).
 RUN go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}" \
     && go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" \
+    && go install golang.org/x/tools/cmd/goimports@latest \
     && cp /root/go/bin/golangci-lint /usr/local/bin/ \
     && cp /root/go/bin/govulncheck /usr/local/bin/ \
+    && cp /root/go/bin/goimports /usr/local/bin/ \
     && golangci-lint --version \
-    && govulncheck -version
+    && govulncheck -version \
+    && goimports --help 2>&1 | head -1
 
 WORKDIR /workspace
 

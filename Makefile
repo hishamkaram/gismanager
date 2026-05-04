@@ -23,14 +23,17 @@ SHELL := /usr/bin/env bash
 
 DEV_SERVICE := dev
 COMPOSE := docker compose
+COMPOSE_TEST := $(COMPOSE) -f docker-compose.test.yml
 RUN := $(COMPOSE) run --rm -T $(DEV_SERVICE)
 ARGS ?=
+GEOSERVER_VERSION ?= 2.28.0
 
 .PHONY: help dev shell build test test-unit test-integration lint lint-fix \
-        vuln tidy fmt vet image clean compose-up compose-down
+        vuln tidy fmt vet image clean \
+        compose-up compose-down compose-test-up compose-test-down compose-test-logs
 
 help: ## show this help
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # ---- interactive ----------------------------------------------------------
 
@@ -49,9 +52,8 @@ test: test-unit ## alias for test-unit
 test-unit: ## go test -race ./... (no integration tag)
 	$(RUN) go test -race -count=1 $(ARGS) ./...
 
-test-integration: ## go test -tags=integration ./... (requires compose-up; added in PR 5)
-	@echo "test-integration: integration suite is wired in PR 5; placeholder for now." >&2
-	@exit 1
+test-integration: ## go test -tags=integration ./... inside the test-runner container against the compose-test stack (requires compose-test-up first)
+	$(COMPOSE_TEST) run --rm -T test-runner go test -race -tags=integration -timeout=15m -count=1 $(ARGS) ./...
 
 vet: ## go vet ./...
 	$(RUN) go vet $(ARGS) ./...
@@ -86,5 +88,15 @@ compose-up: ## start the dev container detached
 compose-down: ## stop & remove dev container (keeps volumes)
 	$(COMPOSE) down
 
+compose-test-up: ## boot integration stack (GeoServer + PostGIS); GEOSERVER_VERSION=2.27.4 for LTS leg
+	GEOSERVER_VERSION=$(GEOSERVER_VERSION) $(COMPOSE_TEST) up -d --wait geoserver postgis
+
+compose-test-down: ## tear down integration stack + volumes
+	$(COMPOSE_TEST) down -v
+
+compose-test-logs: ## tail integration stack logs
+	$(COMPOSE_TEST) logs -f
+
 clean: ## tear down volumes (clears Go mod + build caches)
 	$(COMPOSE) down -v
+	$(COMPOSE_TEST) down -v 2>/dev/null || true

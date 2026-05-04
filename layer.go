@@ -57,12 +57,22 @@ func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *
 	}
 
 	layerName := layer.Name()
+	scoped := catalog.FeatureTypes.InWorkspace(ws).InDatastore(dsName)
+	if _, err := scoped.Get(ctx, layerName); err == nil {
+		// Already published — idempotent no-op.
+		manager.logger.Debug("publish feature type: already exists",
+			"workspace", ws, "datastore", dsName, "layer", layerName)
+		return nil
+	} else if !errors.Is(err, geoserver.ErrNotFound) {
+		manager.logger.Error("get feature type", "workspace", ws, "datastore", dsName, "layer", layerName, "err", err)
+		return newGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, ErrGeoServerPublish, err)
+	}
 	ft := &featuretypes.FeatureType{
 		Name:       layerName,
 		NativeName: layerName,
 		Enabled:    true,
 	}
-	if err := catalog.FeatureTypes.InWorkspace(ws).InDatastore(dsName).Create(ctx, ft); err != nil {
+	if err := scoped.Create(ctx, ft); err != nil {
 		manager.logger.Error("publish feature type", "workspace", ws, "datastore", dsName, "layer", layerName, "err", err)
 		return newGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, ErrGeoServerPublish, err)
 	}
