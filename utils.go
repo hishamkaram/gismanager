@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mholt/archiver"
+	"github.com/hishamkaram/gismanager/internal/zipx"
 
 	//postgres Driver
 	_ "github.com/lib/pq"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //FromConfig load GIS Manager config from yaml file
@@ -101,7 +101,7 @@ func zippedShapeFile(zippedPath string, destPath string) (err error) {
 		err = errors.New("zippedPath must be file not a directory")
 		return
 	}
-	err = archiver.Zip.Open(zippedPath, destPath)
+	err = zipx.Extract(zippedPath, destPath)
 	return
 }
 func preprocessFile(filePath string, tempPath string) (finalPath string, err error) {
