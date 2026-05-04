@@ -28,12 +28,17 @@ jobs:
       GOFLAGS: -buildvcs=false
     steps:
       - name: Install build essentials
-        # Same mirror-flake tolerance as ci.yml — see ci.yml comment.
-        # `file` is required by CodeQL's Autobuild (it sniffs binary
-        # types). Without it, Autobuild logs "The `file` program is
-        # required, but does not appear to be installed".
+        # Same Azure-mirror swap + tolerance as ci.yml. `file` is
+        # required by CodeQL's Autobuild (binary type sniff); without
+        # it Autobuild logs "The `file` program is required".
         run: |
           set -ex
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sed -i \
+              -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              /etc/apt/sources.list.d/ubuntu.sources
+          fi
           apt-get -o Acquire::Retries=3 update || \
             echo "apt-get update returned nonzero — proceeding with whatever indexes did fetch"
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
