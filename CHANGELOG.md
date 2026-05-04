@@ -14,6 +14,17 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 ### Changed
 
 - **CLIs simplified.** `cmd/gismanager` is now ~10 lines (calls `manager.PublishAll(ctx)`); `cmd/layerSchema` is ~20 lines (iterates `manager.Walk(ctx)`). Both lost the duplicated walk-files → open-source → iterate-layers loop they reimplemented.
+- **`Walk` / `PublishAll` `defer source.Destroy()` automatically.** Per-file CGo handles are released between iterations; long-running pipelines no longer leak `*gdal.DataSource` handles. Direct callers of `OpenSource` remain responsible for their own `defer source.Destroy()` — documented in README.
+
+### Added (continued)
+
+- **`(*GdalLayer).Features(ctx) iter.Seq[gdal.Feature]`.** Streaming iterator that destroys each `gdal.Feature` as iteration advances and on early break (no caller-side cleanup contract). Honors `ctx.Err()` between feature reads.
+- **`DBIsAliveContext(ctx, dbType, conn)`.** Ctx-aware variant of `DBIsAlive`. The original `DBIsAlive` now delegates to this with `context.Background()`.
+
+### Deprecated
+
+- **`(*GdalLayer).GetFeatures()`.** Returns `[]*gdal.Feature` whose handles must be `Destroy()`-ed by the caller, easy to forget. Use `Features(ctx)` instead.
+- **`DBIsAlive(dbType, conn)`.** Hard-codes `context.Background()`. Use `DBIsAliveContext` instead.
 
 ## [1.0.0] — 2026-05-04
 

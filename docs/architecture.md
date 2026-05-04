@@ -60,9 +60,31 @@ func (l *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, m *ManagerConf
 // Publish a PostGIS-backed layer as a GeoServer feature type. Idempotent
 // end-to-end (Get + ErrNotFound for workspace, datastore, and feature type).
 func (m *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *GdalLayer) error
+
+// High-level pipeline: walk → load → publish, with per-file source.Destroy().
+// Iteration is files-outer / layers-inner.
+func (m *ManagerConfig) Walk(ctx context.Context) iter.Seq2[WalkItem, error]
+func (m *ManagerConfig) PublishAll(ctx context.Context) error
+
+// Streaming feature iterator that Destroys each gdal.Feature as iteration
+// advances; replaces the deprecated GetFeatures() []*gdal.Feature shape.
+func (l *GdalLayer) Features(ctx context.Context) iter.Seq[gdal.Feature]
 ```
 
 All methods that can fail return errors wrapping a sentinel from [`../errors.go`](../errors.go) — see the README's [Errors](../README.md#errors) section for the matching idiom.
+
+### Resource lifecycle
+
+`*gdal.DataSource` (returned by [`OpenSource`](../manager.go)) and `gdal.Feature` (yielded by [`Features`](../layer.go)) own CGo-side handles that must be released via `.Destroy()`. The binding does not have a `Close()` method — `Destroy()` is the canonical release primitive in `lukeroth/gdal`.
+
+The library's high-level helpers handle this automatically:
+
+- `Walk` / `PublishAll` `defer source.Destroy()` after each file before moving on, so per-file CGo handles never leak even on early `break` of the for-range loop.
+- `Features` destroys each `gdal.Feature` as iteration advances, and the deferred destroy still fires when the for-range loop exits early.
+
+**Direct callers** of `OpenSource` are responsible for their own `defer source.Destroy()`. The README's "Library use" section shows the pattern.
+
+The deprecated `GetFeatures()` and `DBIsAlive()` are kept for back-compat with v1.0 callers but flagged with `// Deprecated:`. New code should use `Features(ctx)` and `DBIsAliveContext(ctx, ...)`.
 
 ## Context-first
 
