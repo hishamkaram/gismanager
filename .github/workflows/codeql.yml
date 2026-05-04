@@ -21,12 +21,32 @@ jobs:
       security-events: write
     container:
       image: ghcr.io/osgeo/gdal:ubuntu-small-3.12.4
+    env:
+      # go build ('CodeQL Autobuild') would otherwise trip on
+      # 'error obtaining VCS status: exit status 128' inside the
+      # container (uid mismatch between checkout owner and runner user).
+      GOFLAGS: -buildvcs=false
     steps:
       - name: Install build essentials
+        # Same mirror-flake tolerance as ci.yml — see ci.yml comment.
+        # `file` is required by CodeQL's Autobuild (it sniffs binary
+        # types). Without it, Autobuild logs "The `file` program is
+        # required, but does not appear to be installed".
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends build-essential ca-certificates git pkg-config
+          set -ex
+          apt-get -o Acquire::Retries=3 update || \
+            echo "apt-get update returned nonzero — proceeding with whatever indexes did fetch"
+          apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            build-essential file git pkg-config
       - uses: actions/checkout@v4
+      # CodeQL's tooling (and the Autobuild step) runs git internally;
+      # the checkout's directory ownership doesn't match the runner-user
+      # inside this container, so git refuses to operate on it
+      # ('fatal: detected dubious ownership in repository at /__w/...').
+      # Whitelist the checkout dir explicitly. See:
+      # https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory
+      - name: Trust the checkout directory for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
