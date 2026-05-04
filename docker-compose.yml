@@ -1,27 +1,33 @@
-version: '3'
+# Dev / build compose stack for gismanager.
+#
+# All Go work happens inside the `dev` container — no host-side GDAL install.
+# `make dev` opens an interactive bash; `make build` / `make test-unit` /
+# `make lint` / `make vuln` shell into it non-interactively.
+#
+# A separate `docker-compose.test.yml` (added in a later PR) layers a GeoServer
+# + PostGIS stack on top for integration tests.
 
 services:
-  geoserver:
-    image: cartoview/geoserver_docker:tomcat
-    restart: unless-stopped
-    hostname: geoserver
+  dev:
     build:
-      context: ./
-      dockerfile: docker/Dockerfile
-    user: root
-    ports:
-      - "8080:8080"
-  postgis:
-    image: kartoza/postgis:10.0-2.4
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: gismanager-dev:local
+    working_dir: /workspace
     volumes:
-      - 'postgis-data:/var/lib/postgresql'
+      - .:/workspace
+      # Cache Go modules and build outputs between runs to avoid re-downloading
+      # on every shell-in.
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     environment:
-      - POSTGRES_DB=gis
-      - POSTGRES_USER=golang
-      - POSTGRES_PASS=golang
-      - ALLOW_IP_RANGE=0.0.0.0/0
-    ports:
-      - 5432:5432
-    restart: unless-stopped
+      CGO_ENABLED: "1"
+      GOFLAGS: "-buildvcs=false"
+    stdin_open: true
+    tty: true
+    command: bash
+
 volumes:
-  postgis-data:
+  go-mod-cache: {}
+  go-build-cache: {}

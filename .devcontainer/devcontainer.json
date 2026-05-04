@@ -1,0 +1,31 @@
+{
+  "name": "gismanager (GDAL + Go)",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "remoteEnv": {
+    "CGO_ENABLED": "1",
+    "GOFLAGS": "-buildvcs=false"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "off",
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintOnSave": "package",
+        "go.formatTool": "goimports",
+        "[go]": {
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
+  "postAttachCommand": "go version && gdalinfo --version"
+}

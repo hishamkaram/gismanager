@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gsconfig "github.com/hishamkaram/geoserver"
+	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/lukeroth/gdal"
 	"github.com/sirupsen/logrus"
 )
@@ -31,10 +31,15 @@ type ManagerConfig struct {
 	logger    *logrus.Logger
 }
 
-//GetGeoserverCatalog return geoserver Catalog instance to deal with geoserver
-func (manager *ManagerConfig) GetGeoserverCatalog() *gsconfig.GeoServer {
-	gsCatalog := gsconfig.GetCatalog(manager.Geoserver.ServerURL, manager.Geoserver.Username, manager.Geoserver.Password)
-	return gsCatalog
+// GetGeoserverCatalog returns a GeoServer v2 client configured against the
+// manager's GeoServer endpoint. Each call constructs a fresh client; the
+// underlying HTTP transport is the stdlib default. Returns an error if the
+// server URL is malformed.
+func (manager *ManagerConfig) GetGeoserverCatalog() (*geoserver.Client, error) {
+	return geoserver.New(
+		manager.Geoserver.ServerURL,
+		geoserver.WithBasicAuth(manager.Geoserver.Username, manager.Geoserver.Password),
+	)
 }
 
 //OpenSource open data source from a given Path and access permission 0/1

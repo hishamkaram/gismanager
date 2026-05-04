@@ -1,0 +1,3 @@
+# PR 6 will populate this directory with go-reviewer, integration-runner,
+# and gdal-reviewer subagents. See CLAUDE.md and the revival plan for the
+# full Claude-config layout.
