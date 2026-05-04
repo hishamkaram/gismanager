@@ -7,6 +7,7 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 ### Added
 
 - **Functional-options constructor.** New `gismanager.New(opts ...Option) (*ManagerConfig, error)` plus `WithLogger` / `WithGeoserver` / `WithDatastore` / `WithSource` helpers. Programmatic callers can now build a manager without a YAML file and inject a custom `*slog.Logger`. `FromConfig(yamlPath)` keeps working — internally delegates to `New` after the YAML decode. `WithLogger(nil)` falls back to the default `GetLogger()` so a zero-arg `New()` is usable.
+- **`(*ManagerConfig).NewLayer(*gdal.Layer) *GdalLayer`.** Stamps the manager's logger onto the wrapper so per-manager logger configuration (custom handler, default attrs) reaches helper methods like `GetLayerSchema`, `GetFeatures`, etc. The zero-value `GdalLayer{Layer: l}` form is still supported — methods that need a logger fall back to `GetLogger()` when the field is nil.
 
 ## [1.0.0] — 2026-05-04
 
