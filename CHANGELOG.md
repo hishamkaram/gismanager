@@ -25,6 +25,19 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 - **`(*GdalLayer).GetFeatures()`.** Returns `[]*gdal.Feature` whose handles must be `Destroy()`-ed by the caller, easy to forget. Use `Features(ctx)` instead.
 - **`DBIsAlive(dbType, conn)`.** Hard-codes `context.Background()`. Use `DBIsAliveContext` instead.
+- **`(*GdalLayer).GetGeomtryName()`.** Typo (missing 'e' in "Geometry"). Use `GeometryName()`.
+
+### Fixed
+
+- **KML files were silently dropped from directory walks** because `supportedEXT` had `"kml"` (no leading dot); `filepath.Ext()` always returns the dot, so the entry never matched. The bug was present since the project's first commit. Fixed: entry is now `".kml"`. A `testdata/sample.kml` fixture was added so directory-walk tests exercise the path.
+
+### Added (continued)
+
+- **`(*GdalLayer).GeometryName()`** — properly-spelled sibling of the deprecated `GetGeomtryName()`. Identical behaviour.
+
+### Removed
+
+- **Unused unexported constants `openFileGDBDriver` and `esriJSONDriver`** in `vars.go`. They were never referenced from `GetDriver`'s switch and dropping them keeps the dispatch table honest. Unexported, no external API impact.
 
 ## [1.0.0] — 2026-05-04
 

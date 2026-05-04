@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>gismanager-test</name>
+    <Placemark>
+      <name>origin</name>
+      <description>Reference point used by GetDriver tests + Walk fixture coverage.</description>
+      <Point>
+        <coordinates>0,0,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>offset</name>
+      <Point>
+        <coordinates>10,20,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

@@ -39,7 +39,10 @@ func TestPreprocessFile(t *testing.T) {
 }
 func TestGetGISFiles(t *testing.T) {
 	files, err := GetGISFiles("./testdata")
-	assert.Equal(t, 4, len(files))
+	// 5 supported files post-PR 5 of v1.1: faults.zip, neighborhood_names_gis.geojson,
+	// nested/nyc_wi-fi_hotspot_locations.geojson, sample.gpkg, sample.kml.
+	// faults_empty.zip yields no GIS files so doesn't count.
+	assert.Equal(t, 5, len(files))
 	assert.Nil(t, err)
 	noDir, NoDirerr := GetGISFiles("./testdata/sample.gpkg")
 	assert.Equal(t, 1, len(noDir))

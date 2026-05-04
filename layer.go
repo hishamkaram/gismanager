@@ -179,17 +179,24 @@ func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *M
 	return
 }
 
-// GetGeomtryName returns the OGR geometry-type name for this layer ("POINT",
-// "LINESTRING", etc.), defaulting to "geom" if the layer has no geometry
-// column.
-func (layer *GdalLayer) GetGeomtryName() (geometryName string) {
+// GeometryName returns the OGR geometry-type name for this layer
+// ("POINT", "LINESTRING", etc.), defaulting to "geom" if the layer has
+// no geometry column.
+func (layer *GdalLayer) GeometryName() string {
 	geom := gdal.Create(layer.Type())
-	geometryName = geom.Name()
-	if geometryName == "" {
-		geometryName = "geom"
+	name := geom.Name()
+	if name == "" {
+		return "geom"
 	}
-	return
+	return name
 }
+
+// GetGeomtryName is the historical (typo'd) name of [GeometryName].
+//
+// Deprecated: typo (missing 'e' in "Geometry"). Use [GeometryName],
+// which is byte-for-byte identical in behaviour. The typo'd form is
+// kept for v1.x back-compat and will be removed at v2.
+func (layer *GdalLayer) GetGeomtryName() string { return layer.GeometryName() }
 
 // GetLayerSchema returns the layer's geometry column followed by every
 // attribute field, each as a LayerField with name + OGR type.
@@ -199,7 +206,7 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 		geomName := layer.GeometryColumn()
 		geomField := LayerField{
 			Name: geomName,
-			Type: layer.GetGeomtryName(),
+			Type: layer.GeometryName(),
 		}
 		fields = append(fields, &geomField)
 		for index := 0; index < layerDef.FieldCount(); index++ {
