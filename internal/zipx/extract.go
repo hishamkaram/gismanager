@@ -69,19 +69,21 @@ func Extract(zipPath, destDir string) (retErr error) {
 const MaxBytesPerEntry int64 = 2 << 30 // 2 GiB
 
 func extractEntry(f *zip.File, absDest string) error {
-	// G305 (file traversal): the joined path is validated against absDest below
-	// before any filesystem I/O; zip-slip names produce ErrZipSlip, not writes.
-	target := filepath.Join(absDest, f.Name) //nolint:gosec // G305: validated against absDest before use.
-	cleanTarget, err := filepath.Abs(target)
-	if err != nil {
-		return fmt.Errorf("zipx: resolve %q: %w", f.Name, err)
+	// Validate the entry name BEFORE any filesystem operation. We use
+	// filepath.Rel — the canonical zip-slip defense recognized by code-scanning
+	// tools (CodeQL go/zipslip): if the relative path from absDest contains
+	// any ".." component, the entry escapes the destination and is refused.
+	cleanName := filepath.Clean(f.Name)
+	if cleanName == "." || cleanName == ".." {
+		return fmt.Errorf("%w: %q", ErrZipSlip, f.Name)
 	}
-
-	// Reject any path that does not stay under absDest. Compare with a
-	// trailing separator so /foo/bar matches but /foo/barbaz does not.
-	prefix := absDest + string(filepath.Separator)
-	if cleanTarget != absDest && !strings.HasPrefix(cleanTarget, prefix) {
-		return fmt.Errorf("%w: %q -> %q", ErrZipSlip, f.Name, cleanTarget)
+	if filepath.IsAbs(cleanName) || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%w: %q", ErrZipSlip, f.Name)
+	}
+	cleanTarget := filepath.Join(absDest, cleanName)
+	rel, err := filepath.Rel(absDest, cleanTarget)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("%w: %q", ErrZipSlip, f.Name)
 	}
 
 	if f.FileInfo().IsDir() {

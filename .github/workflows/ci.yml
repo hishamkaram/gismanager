@@ -23,6 +23,12 @@ concurrency:
 
 env:
   GDAL_IMAGE: ghcr.io/osgeo/gdal:ubuntu-small-3.12.4
+  # Disable VCS stamping in `go build` — when running inside a container the
+  # mounted .git directory is owned by a different uid than the user running
+  # go, and git refuses to operate on it ('error obtaining VCS status: exit
+  # status 128'). The dev image bakes this into its environment but
+  # actions/setup-go inherits its own env, so we set it at the workflow level.
+  GOFLAGS: -buildvcs=false
 
 jobs:
   lint:
@@ -42,7 +48,7 @@ jobs:
           check-latest: true
           cache: true
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.1
           args: --timeout=5m
