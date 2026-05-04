@@ -12,12 +12,13 @@ import (
 	"github.com/lukeroth/gdal"
 )
 
-//GdalLayer Layer
+// GdalLayer wraps a *gdal.Layer with the helper methods gismanager uses
+// (publish, copy-to-PostGIS, schema introspection).
 type GdalLayer struct {
 	*gdal.Layer
 }
 
-//LayerField Layer Field
+// LayerField is one column in a layer's schema (geometry or attribute).
 type LayerField struct {
 	Name string
 	Type string
@@ -94,7 +95,10 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 	return nil
 }
 
-//LayerToPostgis add Layer to Postgis
+// LayerToPostgis copies this layer into the given GDAL PostgreSQL data source
+// (typically a PostGIS-enabled database opened via the OGR PG: driver),
+// preserving the geometry column name and optionally overwriting an existing
+// table of the same name.
 func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *ManagerConfig, overwrite bool) (newLayer *GdalLayer, err error) {
 	connStr := manager.Datastore.PostgresConnectionString()
 	dbErr := DBIsAlive("postgres", connStr)
@@ -103,11 +107,11 @@ func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *M
 		return
 	}
 	if targetSource == nil {
-		err = errors.New("Invalid Datasource")
+		err = errors.New("invalid datasource")
 		return
 	}
 	if layer.Layer == nil {
-		err = errors.New("Invalid Layer")
+		err = errors.New("invalid layer")
 		return
 	}
 	datasource := *targetSource
@@ -119,28 +123,31 @@ func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *M
 	if overwrite {
 		options = append(options, "OVERWRITE=YES")
 	}
-	_layer := datasource.CopyLayer(*layer.Layer, layer.Name(), options)
+	innerLayer := datasource.CopyLayer(*layer.Layer, layer.Name(), options)
 	newLayer = &GdalLayer{
-		Layer: &_layer,
+		Layer: &innerLayer,
 	}
 	return
 }
 
-//GetGeomtryName Get Geometry Name point/line/....etc
+// GetGeomtryName returns the OGR geometry-type name for this layer ("POINT",
+// "LINESTRING", etc.), defaulting to "geom" if the layer has no geometry
+// column.
 func (layer *GdalLayer) GetGeomtryName() (geometryName string) {
-	geom := gdal.Create(layer.Layer.Type())
+	geom := gdal.Create(layer.Type())
 	geometryName = geom.Name()
-	if len(geometryName) == 0 {
+	if geometryName == "" {
 		geometryName = "geom"
 	}
 	return
 }
 
-//GetLayerSchema return slice of layer fields
+// GetLayerSchema returns the layer's geometry column followed by every
+// attribute field, each as a LayerField with name + OGR type.
 func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	if layer.Layer != nil {
-		layerDef := layer.Layer.Definition()
-		geomName := layer.Layer.GeometryColumn()
+		layerDef := layer.Definition()
+		geomName := layer.GeometryColumn()
 		geomField := LayerField{
 			Name: geomName,
 			Type: layer.GetGeomtryName(),
@@ -159,17 +166,18 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 	return
 }
 
-//GetFeatures return layer features
+// GetFeatures returns every feature in the layer, materialized into a slice.
+// Features are read in OGR-FID order. Returns nil if FeatureCount fails.
 func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 	logger := GetLogger()
 	if layer.Layer != nil {
-		count, ok := layer.Layer.FeatureCount(true)
+		count, ok := layer.FeatureCount(true)
 		if !ok {
 			logger.Error("Could not read features")
 		} else {
 			logger.Infof("We Found %d Feature", count)
 			for index := 0; index < count; index++ {
-				f := layer.Layer.Feature(int64(index))
+				f := layer.Feature(int64(index))
 				features = append(features, &f)
 			}
 		}

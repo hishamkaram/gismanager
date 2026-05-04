@@ -1,3 +1,6 @@
+// Command layerSchema prints the geometry + attribute schema of every
+// supported GIS file under the configured source directory. Read-only
+// inspector — does not load to PostGIS or publish to GeoServer.
 package main
 
 import (
@@ -13,10 +16,10 @@ func main() {
 	configFile := flag.String("config", "", "Config File")
 	flag.Parse()
 	if *configFile == "" {
-		panic(errors.New("config 'Parameter required'"))
+		panic(errors.New("config: --config parameter is required"))
 	}
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
-		panic(errors.New("Config File Doesn't exist"))
+		panic(errors.New("config: file does not exist"))
 	}
 	manager, confErr := gismanager.FromConfig(*configFile)
 	if confErr != nil {

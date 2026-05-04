@@ -1,7 +1,7 @@
 package gismanager
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +17,7 @@ func TestIsSupported(t *testing.T) {
 
 }
 func TestZippedShapeFile(t *testing.T) {
-	newDir, _ := ioutil.TempDir("", "zipped_shapeFile")
+	newDir, _ := os.MkdirTemp("", "zipped_shapeFile")
 	unzipErr := zippedShapeFile("./testdata/faults.zip", newDir)
 	assert.Nil(t, unzipErr)
 	dummyErr := zippedShapeFile("./testdata/faults_ss.zip", newDir)

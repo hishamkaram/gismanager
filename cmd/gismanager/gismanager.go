@@ -1,3 +1,7 @@
+// Command gismanager publishes every supported GIS file under the
+// configured source directory into a PostGIS datastore and registers the
+// resulting tables as GeoServer feature types. See README for the YAML
+// config schema and CLAUDE.md for the Docker-only dev workflow.
 package main
 
 import (
@@ -14,10 +18,10 @@ func main() {
 	configFile := flag.String("config", "", "Config File")
 	flag.Parse()
 	if *configFile == "" {
-		panic(errors.New("config 'Parameter required'"))
+		panic(errors.New("config: --config parameter is required"))
 	}
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
-		panic(errors.New("Config File Doesn't exist"))
+		panic(errors.New("config: file does not exist"))
 	}
 	manager, confErr := gismanager.FromConfig(*configFile)
 	if confErr != nil {

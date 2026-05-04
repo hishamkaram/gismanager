@@ -18,7 +18,6 @@ func TestFromConfig(t *testing.T) {
 		logger:    manager.logger,
 	}
 	assert.Equal(t, expected.Geoserver, manager.Geoserver)
-	// assert.Equal(t, expected.Datastore, manager.Datastore)
 	assert.Equal(t, expected.Source, manager.Source)
 	assert.Equal(t, expected.logger, manager.logger)
 	nilManager, nilConfErr := FromConfig("./testdata/test_configs.yml")
