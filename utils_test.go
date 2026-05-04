@@ -26,14 +26,14 @@ func TestZippedShapeFile(t *testing.T) {
 	assert.NotNil(t, dirErr)
 }
 func TestPreprocessFile(t *testing.T) {
-	finalPath, preProcessErr := preprocessFile("./testdata/faults.zip", "")
+	finalPath, preProcessErr := preprocessFile("./testdata/faults.zip", "", nil)
 	assert.NotNil(t, finalPath)
 	assert.NotEqual(t, "", finalPath)
 	assert.Nil(t, preProcessErr)
-	errFinalPath, err := preprocessFile("./testdata/dummy.zip", "")
+	errFinalPath, err := preprocessFile("./testdata/dummy.zip", "", nil)
 	assert.Equal(t, "", errFinalPath)
 	assert.NotNil(t, err)
-	emptyFinalPath, emptyErr := preprocessFile("./testdata/faults_empty.zip", "")
+	emptyFinalPath, emptyErr := preprocessFile("./testdata/faults_empty.zip", "", nil)
 	assert.Equal(t, "", emptyFinalPath)
 	assert.NotNil(t, emptyErr)
 }

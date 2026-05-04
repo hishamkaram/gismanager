@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -57,7 +58,19 @@ func isSupported(ext string) bool {
 // GetGISFiles walks root recursively and returns every supported GIS file
 // path it finds (shapefile, GeoJSON, GeoPackage, KML, plus zipped shapefile
 // bundles which are auto-extracted to a temp directory).
+//
+// Diagnostic logs use the project default logger from [GetLogger]. Callers
+// that want to thread a custom logger should construct a manager via [New]
+// + [WithLogger] and use the manager-driven walk path (added by a
+// follow-up PR); the default logger here is preserved for back-compat.
 func GetGISFiles(root string) ([]string, error) {
+	return getGISFiles(root, GetLogger())
+}
+
+// getGISFiles is the logger-aware implementation. Internal callers
+// (PR 3's Walk iterator, etc.) pass the manager's *slog.Logger so
+// per-manager logger configuration reaches the zip-extraction inner loop.
+func getGISFiles(root string, logger *slog.Logger) ([]string, error) {
 	root, _ = filepath.Abs(root)
 	var files []string
 	fileInfo, statErr := os.Stat(root)
@@ -67,7 +80,7 @@ func GetGISFiles(root string) ([]string, error) {
 	if !fileInfo.IsDir() {
 		extension := strings.ToLower(filepath.Ext(fileInfo.Name()))
 		if isSupported(extension) {
-			finalPath, preProcessErr := preprocessFile(root, "")
+			finalPath, preProcessErr := preprocessFile(root, "", logger)
 			if preProcessErr != nil {
 				return files, preProcessErr
 			}
@@ -81,7 +94,7 @@ func GetGISFiles(root string) ([]string, error) {
 		return files, err
 	}
 	for _, entry := range dirInfo {
-		subFiles, subErr := GetGISFiles(path.Join(root, entry.Name()))
+		subFiles, subErr := getGISFiles(path.Join(root, entry.Name()), logger)
 		if subErr == nil {
 			files = append(files, subFiles...)
 		}
@@ -122,8 +135,10 @@ func zippedShapeFile(zippedPath string, destPath string) (err error) {
 	return
 }
 
-func preprocessFile(filePath string, tempPath string) (finalPath string, err error) {
-	logger := GetLogger()
+func preprocessFile(filePath string, tempPath string, logger *slog.Logger) (finalPath string, err error) {
+	if logger == nil {
+		logger = GetLogger()
+	}
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
 	case ".zip":

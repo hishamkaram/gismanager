@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/hishamkaram/geoserver/v2/rest/datastores"
@@ -14,8 +15,35 @@ import (
 
 // GdalLayer wraps a *gdal.Layer with the helper methods gismanager uses
 // (publish, copy-to-PostGIS, schema introspection).
+//
+// The logger field is intentionally lowercase: callers should construct
+// GdalLayers via [(*ManagerConfig).NewLayer] so the manager's configured
+// logger is stamped on automatically. The zero-value form
+// (`GdalLayer{Layer: l}`) is still supported for back-compat — methods
+// that need a logger fall back to [GetLogger] when the field is nil.
 type GdalLayer struct {
 	*gdal.Layer
+	logger *slog.Logger
+}
+
+// NewLayer wraps a *gdal.Layer for use with gismanager's helpers,
+// stamping the manager's configured logger on the result. Prefer this
+// over the zero-value form so per-manager logger configuration
+// (custom handler, attached attrs, etc.) reaches the layer's helper
+// methods.
+func (manager *ManagerConfig) NewLayer(l *gdal.Layer) *GdalLayer {
+	return &GdalLayer{Layer: l, logger: manager.logger}
+}
+
+// loggerOrDefault returns the layer's stamped logger or, if nil, the
+// project default. Used by methods that emit structured logs but
+// must keep working on zero-value GdalLayers from pre-NewLayer
+// callers.
+func (layer *GdalLayer) loggerOrDefault() *slog.Logger {
+	if layer == nil || layer.logger == nil {
+		return GetLogger()
+	}
+	return layer.logger
 }
 
 // LayerField is one column in a layer's schema (geometry or attribute).
@@ -189,7 +217,7 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 // GetFeatures returns every feature in the layer, materialized into a slice.
 // Features are read in OGR-FID order. Returns nil if FeatureCount fails.
 func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
-	logger := GetLogger()
+	logger := layer.loggerOrDefault()
 	if layer.Layer != nil {
 		count, ok := layer.FeatureCount(true)
 		if !ok {
