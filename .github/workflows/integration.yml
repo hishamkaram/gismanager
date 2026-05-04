@@ -1,0 +1,72 @@
+name: Integration tests
+
+# End-to-end integration suite. Boots a real GeoServer + PostGIS via
+# docker-compose.test.yml, then runs the //go:build integration tests
+# inside the test-runner container (which has GDAL via the dev image).
+# The matrix runs both GeoServer 2.27.4 LTS and 2.28.0 stable; both legs
+# must pass for a PR to merge.
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      geoserver:
+        description: GeoServer version to test against
+        required: false
+        default: "2.28.0"
+        type: choice
+        options:
+          - "2.27.4"
+          - "2.28.0"
+  schedule:
+    # Sundays at 03:23 UTC — outside common deploy windows; offset 6 mins
+    # from the geoserver/v2 client suite to spread infra load.
+    - cron: "23 3 * * 0"
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  matrix:
+    name: GeoServer ${{ matrix.geoserver }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        geoserver: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.geoserver)) || fromJSON('["2.27.4", "2.28.0"]') }}
+    env:
+      GEOSERVER_VERSION: ${{ matrix.geoserver }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build the dev image (which is the test-runner image) once before
+      # bringing up the stack. compose-test-up will reuse it.
+      - name: Build dev image
+        run: docker compose build dev
+
+      - name: Boot GeoServer + PostGIS
+        run: docker compose -f docker-compose.test.yml up -d --wait --wait-timeout=420 geoserver postgis
+
+      - name: Show GeoServer version
+        run: |
+          curl -fsS -u admin:geoserver "http://localhost:8080/geoserver/rest/about/version.json" | head -c 1024 || true
+
+      - name: Run integration tests
+        run: docker compose -f docker-compose.test.yml run --rm -T test-runner go test -race -tags=integration -timeout=15m -count=1 ./...
+
+      - name: Compose logs (on failure)
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --no-color --tail=400
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
