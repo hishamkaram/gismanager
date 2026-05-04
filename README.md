@@ -3,183 +3,225 @@
 [![GitHub license](https://img.shields.io/github/license/hishamkaram/gismanager.svg)](https://github.com/hishamkaram/gismanager/blob/master/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/hishamkaram/gismanager.svg)](https://github.com/hishamkaram/gismanager/issues)
 
+# GIS Manager
 
-<p align="center">
-  <img src="http://geoserver.org/img/OSGeo_project.png" width="200"/>
-</p>
-<p align="center">
-  <img src="https://i.imgur.com/31CL1xg.png" width="200"/>
-</p>
+**A Go tool that publishes GIS vector data to GeoServer via PostGIS.** Drop a directory of shapefiles, GeoJSON, GeoPackage, or KML files into a config, run one command, and gismanager loads each file into a PostGIS database and registers the resulting tables as GeoServer feature types — workspace creation, datastore registration, and layer publishing all idempotent.
 
-# GISManager
-Publish Your GIS Data(Vector Data) to PostGIS and Geoserver
+It exists because the path from "I have a shapefile" to "I have a published GeoServer layer" otherwise involves three different tools (ogr2ogr, psql, and the GeoServer admin UI or REST API). gismanager is one CLI plus one config.
 
-- How to install:
-    - `go get -v github.com/hishamkaram/gismanager`
-- Usage:
-  - `testdata` folder content:
-    ```
-    ./testdata/
-    ├── neighborhood_names_gis.geojson
-    ├── nested
-    │   └── nyc_wi-fi_hotspot_locations.geojson
-    ├── sample.gpkg
-    ```
-  - create `ManagerConfig` instance:
-    ```
-    manager:= gismanager.ManagerConfig{
-      Geoserver: gismanager.GeoserverConfig{WorkspaceName: "golang", Username: "admin", Password: "geoserver", ServerURL: "http://localhost:8080/geoserver"},
-      Datastore: gismanager.DatastoreConfig{Host: "localhost", Port: 5432, DBName: "gis", DBUser: "golang", DBPass: "golang", Name: "gismanager_data"},
-      Source:    gismanager.SourceConfig{Path: "./testdata"},
-      logger:    gismanager.GetLogger(),
+## Contents
+
+- [What this tool does](#what-this-tool-does)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Worked example: publish a directory of GIS files](#worked-example-publish-a-directory-of-gis-files)
+- [Errors](#errors)
+- [Configuration](#configuration)
+- [Library use](#library-use)
+- [Version compatibility](#version-compatibility)
+- [Contributing](#contributing)
+- [License](#license)
+
+## What this tool does
+
+Two CLI binaries plus a small Go library:
+
+- **`gismanager`** — full pipeline. Walks `source.path`, picks every supported GIS file, copies its layers into PostGIS via OGR's PostgreSQL driver, then publishes each PostGIS table as a GeoServer feature type. Idempotent: workspace, datastore, and feature-type creation all check existence first via the `geoserver/v2` client's `Get` + `errors.Is(err, geoserver.ErrNotFound)` idiom.
+- **`layerSchema`** — read-only schema inspector. Walks `source.path`, opens each GIS file via GDAL, and prints the geometry column + attribute fields for every layer it finds. No PostGIS, no GeoServer.
+- **`package gismanager`** — the same flow as a Go library. Construct a `*ManagerConfig` (today via `gismanager.FromConfig(yamlPath)`; functional-options constructor planned), then call `OpenSource` / `LayerToPostgis` / `PublishGeoserverLayer` directly.
+
+### Supported source formats
+
+Driven by GDAL's OGR drivers; whatever GDAL can read, gismanager can ingest. The currently dispatched extensions:
+
+| Extension | Driver |
+|---|---|
+| `.shp`, `.zip` (zipped shapefile bundle) | ESRI Shapefile |
+| `.geojson`, `.json` | GeoJSON |
+| `.gpkg` | GeoPackage |
+| `.kml` | KML |
+
+Zipped shapefile bundles are auto-extracted into a temp directory before the OGR open — see [`internal/zipx`](internal/zipx) for the stdlib `archive/zip`-based extractor (zip-slip rejection, 2 GiB per-entry cap).
+
+## Install
+
+**This project does NOT install GDAL on the host machine.** All build, test, and run work happens inside the Docker dev image (`ghcr.io/osgeo/gdal:ubuntu-small-3.12.4` base + Go 1.25.9 + tooling). If you don't have Docker, [install Docker first](https://docs.docker.com/get-docker/).
+
+```bash
+git clone https://github.com/hishamkaram/gismanager
+cd gismanager
+make dev          # opens an interactive bash inside the container
+# OR run targets non-interactively:
+make build        # go build ./...
+make test-unit    # unit tests (no live GeoServer)
+make image        # produce a runtime image: gismanager:local
+```
+
+The runtime image (`make image`) is a multi-stage build that ships only the binaries + libgdal at `~500 MB`. It's what you'd publish to a registry for production-ish use.
+
+## Quick start
+
+The shortest path to a published layer assumes you have a GeoServer + PostGIS already running somewhere reachable. If you don't, the project's own integration test stack is a working example — `make compose-test-up` boots GeoServer 2.28.0 + PostGIS 16 in two containers.
+
+1. Write a config file. Example `my-config.yaml`:
+
+   ```yaml
+   geoserver:
+     url: http://localhost:8080/geoserver
+     username: admin
+     password: geoserver
+     workspace: my_workspace
+   datastore:
+     host: localhost
+     port: 5432
+     database: gis
+     username: golang
+     password: golang
+     name: my_postgis_store
+   source:
+     path: ./testdata
+   ```
+
+2. Run the CLI from the runtime image:
+
+   ```bash
+   docker run --rm --network host \
+     -v "$PWD/my-config.yaml:/cfg.yaml:ro" \
+     -v "$PWD/testdata:/testdata:ro" \
+     gismanager:local --config /cfg.yaml
+   ```
+
+   gismanager scans `/testdata`, loads each supported file into PostGIS, and publishes the resulting tables as feature types in the `my_workspace` workspace.
+
+## Worked example: publish a directory of GIS files
+
+The repo's own `testdata/` directory has a GeoJSON file and a GeoPackage. Booting the integration stack and publishing them end-to-end:
+
+```bash
+# Boot GeoServer 2.28.0 + PostGIS 16 in containers.
+make compose-test-up
+
+# Run the CLI inside the test-runner container so it can see the
+# in-network GeoServer + PostGIS by service name.
+docker compose -f docker-compose.test.yml run --rm test-runner \
+  bash -c 'go run ./cmd/gismanager --config testdata/test_config.yml'
+
+# Verify via the GeoServer REST API.
+curl -fsS -u admin:geoserver \
+  http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gismanager_data/featuretypes.json | jq
+
+# Tear down.
+make compose-test-down
+```
+
+Same idea programmatically (the integration suite is a worked example — see [`publish_integration_test.go`](publish_integration_test.go) `TestPublishGeoJSON_EndToEnd_Integration`).
+
+## Errors
+
+Every error gismanager returns is a `*GISError` wrapping a sentinel from [`errors.go`](errors.go). Match by sentinel:
+
+```go
+import "github.com/hishamkaram/gismanager"
+
+err := mgr.PublishGeoserverLayer(ctx, layer)
+switch {
+case errors.Is(err, gismanager.ErrPostGISConnect):
+    // PostGIS unreachable; bring it up and retry.
+case errors.Is(err, gismanager.ErrGeoServerPublish):
+    // Workspace/datastore/feature-type creation failed; the wrapped
+    // *geoserver.APIError carries the HTTP status (404, 409, 500…).
+    var apiErr *geoserver.APIError
+    if errors.As(err, &apiErr) {
+        log.Printf("status=%d body=%s", apiErr.StatusCode, apiErr.Body)
     }
-    ```
-  - get Supported GIS Files:
-    ```
-    files, _ := gismanager.GetGISFiles(manager.Source.Path)
-    for _, file := range files {
-      fmt.Println(file)
+case errors.Is(err, gismanager.ErrUnsupportedFormat):
+    // The path's extension isn't one of the dispatched OGR drivers.
+}
+```
+
+Sentinels: `ErrConfigInvalid`, `ErrUnsupportedFormat`, `ErrInvalidLayer`, `ErrInvalidDatasource`, `ErrPostGISConnect`, `ErrGeoServerPublish`, `ErrNoSourcesFound`. Never compare error strings — `errors.Is(err, sentinel)` is the only correct test.
+
+## Configuration
+
+YAML schema (the same struct gets used by `gismanager.FromConfig`):
+
+```yaml
+geoserver:
+  url: <string>          # GeoServer base URL, e.g. http://geoserver:8080/geoserver
+  username: <string>     # admin user
+  password: <string>
+  workspace: <string>    # workspace gismanager publishes into; created on first use
+
+datastore:               # connection params for the PostGIS database
+  host: <string>
+  port: <uint>
+  database: <string>     # database name (created externally; gismanager does not provision databases)
+  username: <string>
+  password: <string>
+  name: <string>         # GeoServer datastore name (must be unique within the workspace)
+
+source:
+  path: <string>         # directory or single file containing GIS data
+```
+
+A working config used by the integration suite lives at [`testdata/test_config.yml`](testdata/test_config.yml).
+
+## Library use
+
+```go
+import (
+    "context"
+    "github.com/hishamkaram/gismanager"
+)
+
+func main() {
+    mgr, err := gismanager.FromConfig("my-config.yaml")
+    if err != nil { /* ... */ }
+
+    ctx := context.Background()
+
+    // Discover GIS files under source.path.
+    files, _ := gismanager.GetGISFiles(mgr.Source.Path)
+
+    target, err := mgr.OpenSource(ctx, mgr.Datastore.BuildConnectionString(), 1)
+    if err != nil { /* ... */ }
+
+    for _, f := range files {
+        src, err := mgr.OpenSource(ctx, f, 0)
+        if err != nil { continue }
+        for i := 0; i < src.LayerCount(); i++ {
+            layer := src.LayerByIndex(i)
+            gLayer := gismanager.GdalLayer{Layer: &layer}
+            newLayer, err := gLayer.LayerToPostgis(target, mgr, true)
+            if err != nil || newLayer == nil { continue }
+            _ = mgr.PublishGeoserverLayer(ctx, newLayer)
+        }
     }
-    ```
-    - output:
-      ```
-      <full_path>/testdata/neighborhood_names_gis.geojson
-      <full_path>/testdata/nested/nyc_wi-fi_hotspot_locations.geojson
-      <full_path>/testdata/sample.gpkg
-      ```
-  - read files and get layers Schema:
-    ```
-      for _, file := range files {
-        source, ok := manager.OpenSource(file, 0)
-        if ok {
-          for index := 0; index < source.LayerCount(); index++ {
-            layer := source.LayerByIndex(index)
-            gLayer := gismanager.GdalLayer{
-              Layer: &layer,
-            }
-            fmt.Println(layer.Name())
-            for _, f := range gLayer.GetLayerSchema() {
-              fmt.Printf("\n%+v\n", *f)
-            }
-          }
-        }
-      }
-    ```
-    - output sample:
-      ```
-      neighborhood_names_gis
+}
+```
 
-      {Name:geom Type:POINT}
+## Version compatibility
 
-      {Name:stacked Type:String}
+gismanager v1.0.x targets:
 
-      {Name:name Type:String}
+- **Go 1.25+** — required by the transitive `geoserver/v2` dependency.
+- **GeoServer 2.27 LTS + 2.28 stable** — both validated by the matrix integration leg in CI on every PR.
+- **PostGIS 16-3.4** — the integration stack pins this; older PostGIS (≥ 2.5) should work but isn't gated in CI.
+- **GDAL 3.12.x** — pinned via the `ghcr.io/osgeo/gdal:ubuntu-small-3.12.4` base image. Bumping requires re-running the integration suite.
 
-      {Name:annoline1 Type:String}
+GeoServer 3.0 (Tomcat 11 / Jakarta EE / ImageN) is parked for a future v1.x point release after the upstream migration settles.
 
-      {Name:annoline3 Type:String}
+Full matrix: [`docs/version-compat.md`](docs/version-compat.md).
 
-      {Name:objectid Type:String}
+## Contributing
 
-      {Name:annoangle Type:String}
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Highlights:
 
-      {Name:annoline2 Type:String}
+- All work happens inside the Docker dev image — no host GDAL install.
+- Branch from `master`; squash-merge with `--delete-branch`. Never push directly to `master`.
+- Both unit and integration tests are mandatory on every PR. The matrix CI runs against GeoServer 2.27.4 + 2.28.0; both legs must pass.
+- Conventional Commits.
 
-      {Name:borough Type:String}
-      ...
-      ```
-  - add your gis data to your database:
-    ```
-      for _, file := range files {
-          source, ok := manager.OpenSource(file, 0)
-          targetSource, targetOK := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
-          if ok && targetOK {
-            for index := 0; index < source.LayerCount(); index++ {
-              layer := source.LayerByIndex(index)
-              gLayer := gismanager.GdalLayer{
-                Layer: &layer,
-              }
-              newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true)
-              if postgisErr != nil {
-                panic(postgisErr)
-              }
-              logger.Infof("Layer: %s added to you database", newLayer.Name())
-            }
-          }
-      }
-    ```
-    - output:
-      ```
-      INFO[14-10-2018 17:28:37] Layer: neighborhood_names_gis added to you database 
-      INFO[14-10-2018 17:28:38] Layer: nyc_wi_fi_hotspot_locations added to you database 
-      INFO[14-10-2018 17:28:38] Layer: hwy_patrol added to you database
-      ```
-   - update the previous code to publish your postgis layers to geoserver
-     ```
-      for _, file := range files {
-        source, ok := manager.OpenSource(file, 0)
-        targetSource, targetOK := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
-        if ok && targetOK {
-          for index := 0; index < source.LayerCount(); index++ {
-            layer := source.LayerByIndex(index)
-            gLayer := gismanager.GdalLayer{
-              Layer: &layer,
-            }
-            if newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true); newLayer.Layer != nil || postgisErr != nil {
-              ok, pubErr := manager.PublishGeoserverLayer(newLayer)
-              if pubErr != nil {
-                logger.Error(pubErr)
-              }
-              if !ok {
-                logger.Error("Failed to Publish")
-              } else {
-                logger.Info("published")
-              }
-            }
+## License
 
-          }
-        }
-      }
-     ```
-     - output:
-     ```
-      INFO[14-10-2018 17:37:07] url:http://localhost:8080/geoserver/rest/workspaces/golang  Status=404  
-      ERRO[14-10-2018 17:37:07] No such workspace: 'golang' found            
-      INFO[14-10-2018 17:37:07] url:http://localhost:8080/geoserver/rest/workspaces  Status=201  
-      INFO[14-10-2018 17:37:07] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gis?quietOnNotFound=true  Status=404  
-      INFO[14-10-2018 17:37:07] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores  Status=201  
-      ERRO[14-10-2018 17:37:07] {"featureType":{"name":"neighborhood_names_gis","nativeName":"neighborhood_names_gis"}} 
-      INFO[14-10-2018 17:37:07] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gis/featuretypes  Status=201  
-      INFO[14-10-2018 17:37:07] published                                    
-      INFO[14-10-2018 17:37:08] url:http://localhost:8080/geoserver/rest/workspaces/golang  Status=200  
-      INFO[14-10-2018 17:37:08] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gis?quietOnNotFound=true  Status=200  
-      ERRO[14-10-2018 17:37:08] {"featureType":{"name":"nyc_wi_fi_hotspot_locations","nativeName":"nyc_wi_fi_hotspot_locations"}} 
-      INFO[14-10-2018 17:37:08] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gis/featuretypes  Status=201  
-      INFO[14-10-2018 17:37:08] published                                    
-      INFO[14-10-2018 17:37:08] url:http://localhost:8080/geoserver/rest/workspaces/golang  Status=200  
-      INFO[14-10-2018 17:37:08] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gis?quietOnNotFound=true  Status=200  
-      ERRO[14-10-2018 17:37:08] {"featureType":{"name":"hwy_patrol","nativeName":"hwy_patrol"}} 
-      INFO[14-10-2018 17:37:08] url:http://localhost:8080/geoserver/rest/workspaces/golang/datastores/gis/featuretypes  Status=201  
-      INFO[14-10-2018 17:37:08] published 
-     ```
-     - done check you geoserver or via geoserver rest api url http://localhost:8080/geoserver/rest/layers.json : 
-       ```
-        {
-          "layers": {
-            "layer": [..., {
-              "name": "golang:hwy_patrol",
-              "href": "http:\/\/localhost:8080\/geoserver\/rest\/layers\/golang%3Ahwy_patrol.json"
-            }, {
-              "name": "golang:neighborhood_names_gis",
-              "href": "http:\/\/localhost:8080\/geoserver\/rest\/layers\/golang%3Aneighborhood_names_gis.json"
-            }, {
-              "name": "golang:nyc_wi_fi_hotspot_locations",
-              "href": "http:\/\/localhost:8080\/geoserver\/rest\/layers\/golang%3Anyc_wi_fi_hotspot_locations.json"
-            }]
-          }
-        }
-       ```
- ---
- 
-# Todo:
-  - [ ] backup postgis as geopackage
+[MIT](LICENSE) © Hesham Karm.
