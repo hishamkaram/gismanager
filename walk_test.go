@@ -86,6 +86,36 @@ func TestWalk_HonorsContextCancellation(t *testing.T) {
 		"with a canceled context the iterator must either surface context.Canceled or yield zero items; got %d items", yielded)
 }
 
+// TestWalk_PicksUpKMLFixture confirms the KML branch is exercised
+// end-to-end after the supportedEXT ".kml" fix: the testdata/sample.kml
+// fixture must appear at least once in Walk's yielded paths. Pre-PR 5
+// the supportedEXT entry was "kml" (no dot) and KML files were silently
+// dropped from directory walks; this test would have failed.
+func TestWalk_PicksUpKMLFixture(t *testing.T) {
+	mgr, err := New(WithSource(SourceConfig{Path: "./testdata"}))
+	assert.NoError(t, err)
+
+	sawKML := false
+	for item, walkErr := range mgr.Walk(context.Background()) {
+		if walkErr != nil {
+			continue
+		}
+		if endsWith(item.Path, ".kml") {
+			sawKML = true
+			break
+		}
+	}
+	assert.True(t, sawKML,
+		"expected testdata/sample.kml to appear in Walk output after the .kml supportedEXT fix")
+}
+
+func endsWith(s, suffix string) bool {
+	if len(suffix) > len(s) {
+		return false
+	}
+	return s[len(s)-len(suffix):] == suffix
+}
+
 // TestWalk_NonexistentSource_ReturnsError confirms a non-existent source
 // directory surfaces as an error item (not a panic, not a silent empty
 // iteration). The error wraps the os.Stat failure from getGISFiles.
