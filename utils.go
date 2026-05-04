@@ -1,10 +1,10 @@
 package gismanager
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -12,17 +12,17 @@ import (
 
 	"github.com/hishamkaram/gismanager/internal/zipx"
 
-	//postgres Driver
+	// PostgreSQL driver registered via blank import for database/sql.
 	_ "github.com/lib/pq"
 	yaml "gopkg.in/yaml.v3"
 )
 
-//FromConfig load GIS Manager config from yaml file
+// FromConfig loads a ManagerConfig from a YAML file at the given path.
 func FromConfig(configFile string) (config *ManagerConfig, err error) {
 	gpkgConfig := ManagerConfig{}
 	gpkgConfig.logger = GetLogger()
-	path, _ := filepath.Abs(configFile)
-	yamlFile, err := ioutil.ReadFile(path)
+	absPath, _ := filepath.Abs(configFile)
+	yamlFile, err := os.ReadFile(absPath)
 	if err != nil {
 		gpkgConfig.logger.Errorf("yamlFile.Get err   %v ", err)
 		return
@@ -35,6 +35,7 @@ func FromConfig(configFile string) (config *ManagerConfig, err error) {
 	config = &gpkgConfig
 	return
 }
+
 func isSupported(ext string) bool {
 	for _, a := range supportedEXT {
 		if a == ext {
@@ -44,7 +45,9 @@ func isSupported(ext string) bool {
 	return false
 }
 
-//GetGISFiles retrun List of All GIS Files in this path
+// GetGISFiles walks root recursively and returns every supported GIS file
+// path it finds (shapefile, GeoJSON, GeoPackage, KML, plus zipped shapefile
+// bundles which are auto-extracted to a temp directory).
 func GetGISFiles(root string) ([]string, error) {
 	root, _ = filepath.Abs(root)
 	var files []string
@@ -64,12 +67,12 @@ func GetGISFiles(root string) ([]string, error) {
 		}
 		return files, nil
 	}
-	dirInfo, err := ioutil.ReadDir(root)
+	dirInfo, err := os.ReadDir(root)
 	if err != nil {
 		return files, err
 	}
-	for _, file := range dirInfo {
-		subFiles, subErr := GetGISFiles(path.Join(root, file.Name()))
+	for _, entry := range dirInfo {
+		subFiles, subErr := GetGISFiles(path.Join(root, entry.Name()))
 		if subErr == nil {
 			files = append(files, subFiles...)
 		}
@@ -77,20 +80,25 @@ func GetGISFiles(root string) ([]string, error) {
 	return files, nil
 }
 
-//DBIsAlive check if database alive
+// DBIsAlive opens a database/sql connection and pings it. Returns a
+// non-nil error if either step fails.
+//
+// TODO(PR 4): take a context.Context argument so callers can apply
+// deadlines / cancellation.
 func DBIsAlive(dbType string, connectionStr string) (err error) {
 	db, dbErr := sql.Open(dbType, connectionStr)
 	if dbErr != nil {
 		err = dbErr
 		return
 	}
-	if pingErr := db.Ping(); pingErr != nil {
-		db.Close()
+	if pingErr := db.PingContext(context.Background()); pingErr != nil {
+		_ = db.Close()
 		err = pingErr
 		return
 	}
 	return
 }
+
 func zippedShapeFile(zippedPath string, destPath string) (err error) {
 	fileInfo, statErr := os.Stat(zippedPath)
 	if statErr != nil || os.IsNotExist(statErr) {
@@ -104,36 +112,36 @@ func zippedShapeFile(zippedPath string, destPath string) (err error) {
 	err = zipx.Extract(zippedPath, destPath)
 	return
 }
+
 func preprocessFile(filePath string, tempPath string) (finalPath string, err error) {
 	logger := GetLogger()
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
 	case ".zip":
-		newDir, tempDirErr := ioutil.TempDir(tempPath, "zipped_shapeFile")
+		newDir, tempDirErr := os.MkdirTemp(tempPath, "zipped_shapeFile")
 		fmt.Println(newDir)
 		if tempDirErr != nil {
 			logger.Error(tempDirErr)
 			err = tempDirErr
-			break
+			return
 		}
 		unzipErr := zippedShapeFile(filePath, newDir)
 		if unzipErr != nil {
 			logger.Error(unzipErr)
 			err = unzipErr
-			break
+			return
 		}
 		files, filesErr := GetGISFiles(newDir)
 		if filesErr != nil {
 			logger.Error(filesErr)
 			err = filesErr
-			break
+			return
 		}
 		if len(files) == 0 {
 			err = errors.New("cannot find gis files")
-			break
+			return
 		}
 		finalPath = files[0]
-		break
 	default:
 		finalPath = filePath
 	}

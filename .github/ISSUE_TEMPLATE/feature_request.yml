@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest a new feature or API for gismanager
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! For larger or breaking changes, please discuss before implementing.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to accomplish that the current API or CLI makes hard?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: API sketch, signatures, CLI flags, example call site if possible.
+      render: go
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: How big a change?
+      options:
+        - Small (additive — new option, new format support, etc.)
+        - Medium (new sub-command or new method on Manager)
+        - Large (breaking — would gate a major-version bump)
+        - Not sure
+    validations:
+      required: true

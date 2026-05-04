@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a bug in gismanager
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! Please fill out the form below.
+
+        For security issues, **do not open a public issue** — see [SECURITY.md](https://github.com/hishamkaram/gismanager/blob/master/SECURITY.md) when it lands; until then, use private security advisories.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of what the bug is.
+      placeholder: When I run `gismanager --config foo.yaml` against a directory of shapefiles, ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: A short config + sample data structure (or Go program if using the library) that reproduces the issue. Smaller is better.
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: gismanager-version
+    attributes:
+      label: gismanager version
+      description: Output of `gismanager --version` if running the CLI, or the `go list -m` line for the library.
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version
+      placeholder: go1.25.3
+    validations:
+      required: true
+  - type: input
+    id: gdal-version
+    attributes:
+      label: GDAL version
+      description: From `gdalinfo --version`. If running inside the Docker dev image, this is the OSGeo image's bundled GDAL.
+      placeholder: GDAL 3.12.4
+    validations:
+      required: true
+  - type: input
+    id: geoserver-version
+    attributes:
+      label: GeoServer server version
+      description: From the `/rest/about/version` endpoint
+      placeholder: 2.28.0
+    validations:
+      required: true
+  - type: input
+    id: postgis-version
+    attributes:
+      label: PostGIS server version
+      description: `SELECT PostGIS_full_version();`
+      placeholder: PostGIS 3.4.x
+  - type: input
+    id: os
+    attributes:
+      label: Host OS
+      placeholder: Linux 6.8.0 / macOS 14 / Windows 11 (WSL2)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / output
+      description: Paste any error output. Redact credentials and PII.
+      render: shell

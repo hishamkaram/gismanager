@@ -10,7 +10,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-//GeoserverConfig geoserver configuration
+// GeoserverConfig holds the GeoServer endpoint and credentials. WorkspaceName
+// is the workspace gismanager publishes layers into; it is created on first
+// use if missing.
 type GeoserverConfig struct {
 	WorkspaceName string `yaml:"workspace"`
 	ServerURL     string `yaml:"url"`
@@ -18,12 +20,13 @@ type GeoserverConfig struct {
 	Password      string `yaml:"password"`
 }
 
-//SourceConfig Data Source/Dir configuration
+// SourceConfig points at the directory (or single file) gismanager scans for
+// supported GIS data files.
 type SourceConfig struct {
 	Path string `yaml:"path"`
 }
 
-//ManagerConfig is the configuration Object
+// ManagerConfig is the top-level configuration loaded from YAML.
 type ManagerConfig struct {
 	Geoserver GeoserverConfig `yaml:"geoserver"`
 	Datastore DatastoreConfig `yaml:"datastore"`
@@ -42,7 +45,8 @@ func (manager *ManagerConfig) GetGeoserverCatalog() (*geoserver.Client, error) {
 	)
 }
 
-//OpenSource open data source from a given Path and access permission 0/1
+// OpenSource opens a GDAL data source at the given path. access is the GDAL
+// permission flag (0 read-only, 1 read-write).
 func (manager *ManagerConfig) OpenSource(path string, access int) (source *gdal.DataSource, ok bool) {
 	driver, err := manager.GetDriver(path)
 	if err != nil {
@@ -56,7 +60,9 @@ func (manager *ManagerConfig) OpenSource(path string, access int) (source *gdal.
 	return
 }
 
-//GetDriver return the proper driver based on file path/database connection
+// GetDriver returns the OGR driver appropriate for the given path or
+// connection string. PostgreSQL connection strings (matching pgRegex) get
+// the PostgreSQL driver; everything else dispatches on file extension.
 func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err error) {
 	if pgRegex.MatchString(path) {
 		driver = gdal.OGRDriverByName(postgreSQLDriver)
@@ -64,18 +70,14 @@ func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err
 		switch strings.ToLower(filepath.Ext(path)) {
 		case ".gpkg":
 			driver = gdal.OGRDriverByName(geopackageDriver)
-			break
 		case ".shp", ".zip":
 			driver = gdal.OGRDriverByName(shapeFileDriver)
-			break
 		case ".json", ".geojson":
 			driver = gdal.OGRDriverByName(geoJSONDriver)
-			break
 		case ".kml":
 			driver = gdal.OGRDriverByName(kmlDriver)
-			break
 		default:
-			err = errors.New("Can't Find the Proper Driver")
+			err = errors.New("can't find the proper driver")
 			manager.logger.Error(err)
 		}
 	}

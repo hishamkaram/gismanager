@@ -2,7 +2,9 @@ package gismanager
 
 import "github.com/sirupsen/logrus"
 
-//GetLogger return logger
+// GetLogger returns the project's default logrus logger.
+//
+// TODO(PR 4): replace with *slog.Logger per CLAUDE.md's logging rule.
 func GetLogger() (logger *logrus.Logger) {
 	logger = logrus.New()
 	Formatter := new(logrus.TextFormatter)

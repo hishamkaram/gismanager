@@ -17,6 +17,6 @@ func TestBuildConnectionString(t *testing.T) {
 	conn := ds.BuildConnectionString()
 	assert.NotNil(t, conn)
 	assert.NotEqual(t, "", conn)
-	assert.True(t, pgRegex.Match([]byte(conn)))
+	assert.True(t, pgRegex.MatchString(conn))
 
 }
