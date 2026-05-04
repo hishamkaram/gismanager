@@ -1,8 +1,10 @@
 package gismanager
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hishamkaram/geoserver/v2/rest/workspaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -41,6 +43,11 @@ type ManagerLayerSuite struct {
 }
 
 func (suite *ManagerLayerSuite) SetupSuite() {
+	// TODO(PR 5): move this whole suite to layer_integration_test.go behind
+	// `//go:build integration`. The suite end-to-end-tests PostGIS + GeoServer
+	// publish; PR 1 keeps the structure and skips at the entry point so the
+	// unit job stays green without a live compose stack.
+	suite.T().Skip("integration-flavored: requires PostGIS + GeoServer; rewired in PR 5")
 	manager, _ := FromConfig("./testdata/test_config.yml")
 	suite.manager = manager
 }
@@ -64,17 +71,24 @@ func (suite *ManagerLayerSuite) TestLayerOperations() {
 	newLayer, err := gLayer.LayerToPostgis(targetSource, manager, true)
 	assert.NotNil(suite.T(), newLayer)
 	assert.Nil(suite.T(), err)
-	ok, publishErr := manager.PublishGeoserverLayer(newLayer)
-	assert.True(suite.T(), ok)
+	publishErr := manager.PublishGeoserverLayer(context.Background(), newLayer)
 	assert.Nil(suite.T(), publishErr)
 }
 
 func (suite *ManagerLayerSuite) TearDownSuite() {
-	catalog := suite.manager.GetGeoserverCatalog()
-	deleted, err := catalog.DeleteWorkspace(suite.manager.Geoserver.WorkspaceName, true)
-	assert.True(suite.T(), deleted)
+	if suite.manager == nil {
+		return // SetupSuite skipped; nothing to tear down.
+	}
+	catalog, err := suite.manager.GetGeoserverCatalog()
 	assert.Nil(suite.T(), err)
+	deleteErr := catalog.Workspaces.Delete(
+		context.Background(),
+		suite.manager.Geoserver.WorkspaceName,
+		workspaces.DeleteOptions{Recurse: true},
+	)
+	assert.Nil(suite.T(), deleteErr)
 }
+
 func TestManagerLayerSuite(t *testing.T) {
 	suite.Run(t, new(ManagerLayerSuite))
 }

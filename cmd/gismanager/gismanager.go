@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"os"
@@ -22,6 +23,7 @@ func main() {
 	if confErr != nil {
 		panic(confErr)
 	}
+	ctx := context.Background()
 	files, _ := gismanager.GetGISFiles(manager.Source.Path)
 	for _, file := range files {
 		source, ok := manager.OpenSource(file, 0)
@@ -32,18 +34,19 @@ func main() {
 				gLayer := gismanager.GdalLayer{
 					Layer: &layer,
 				}
-				if newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true); newLayer.Layer != nil || postgisErr != nil {
-					ok, pubErr := manager.PublishGeoserverLayer(newLayer)
-					if pubErr != nil {
-						logger.Error(pubErr)
-					}
-					if !ok {
-						logger.Error("Failed to Publish")
-					} else {
-						logger.Info("published")
-					}
+				newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true)
+				if postgisErr != nil {
+					logger.Error(postgisErr)
+					continue
 				}
-
+				if newLayer == nil || newLayer.Layer == nil {
+					continue
+				}
+				if err := manager.PublishGeoserverLayer(ctx, newLayer); err != nil {
+					logger.Error(err)
+					continue
+				}
+				logger.Info("published")
 			}
 		}
 	}

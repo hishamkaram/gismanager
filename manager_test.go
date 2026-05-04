@@ -40,9 +40,9 @@ func TestOpenSource(t *testing.T) {
 }
 func TestGetGeoserverCatalog(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")
-	catalog := manager.GetGeoserverCatalog()
+	catalog, err := manager.GetGeoserverCatalog()
+	assert.Nil(t, err)
 	assert.NotNil(t, catalog)
-
 }
 func TestGetDriver(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")
