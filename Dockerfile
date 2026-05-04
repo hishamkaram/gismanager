@@ -14,8 +14,8 @@
 #              images.
 
 ARG GDAL_VERSION=3.12.4
-ARG GO_VERSION=1.25.3
-ARG GOLANGCI_LINT_VERSION=v1.64.4
+ARG GO_VERSION=1.25.9
+ARG GOLANGCI_LINT_VERSION=v2.12.1
 ARG GOVULNCHECK_VERSION=latest
 
 # ---------------------------------------------------------------------------
@@ -58,10 +58,13 @@ ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}" \
     GOFLAGS="-buildvcs=false" \
     CGO_ENABLED=1
 
-# Install golangci-lint and govulncheck. Pinned versions so CI is reproducible.
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-        | sh -s -- -b /usr/local/bin "${GOLANGCI_LINT_VERSION}" \
+# Install golangci-lint v2 and govulncheck via go install (the install.sh
+# script's checksum validation has been flaky for v2.12.1; go install is
+# the authoritative path per the golangci-lint v2 docs).
+RUN go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}" \
     && go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" \
+    && cp /root/go/bin/golangci-lint /usr/local/bin/ \
+    && cp /root/go/bin/govulncheck /usr/local/bin/ \
     && golangci-lint --version \
     && govulncheck -version
 
