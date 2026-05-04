@@ -99,6 +99,38 @@ func cleanup(t *testing.T, mgr *gismanager.ManagerConfig, ws string) {
 	}
 }
 
+// TestPublishAll_EndToEnd_Integration exercises the high-level
+// (*ManagerConfig).PublishAll convenience added in PR 3 of the v1.1
+// series. It walks testdata/ end-to-end through the same pipeline the
+// gismanager CLI uses (Walk → LayerToPostgis → PublishGeoserverLayer)
+// and verifies via the v2 client that the workspace + datastore + at
+// least one feature type exist when PublishAll returns nil.
+//
+// Sits alongside the lower-level Publish* tests so a regression in
+// either the helper composition (PublishAll) or the underlying
+// primitives (PublishGeoserverLayer) surfaces independently.
+func TestPublishAll_EndToEnd_Integration(t *testing.T) {
+	ctx := context.Background()
+	ws := uniqueWorkspaceName(t)
+	mgr := integrationConfig(t, ws)
+	t.Cleanup(func() { cleanup(t, mgr, ws) })
+
+	if err := mgr.PublishAll(ctx); err != nil {
+		t.Fatalf("PublishAll: %v", err)
+	}
+
+	c, err := mgr.GetGeoserverCatalog()
+	if err != nil {
+		t.Fatalf("GetGeoserverCatalog: %v", err)
+	}
+	if _, err := c.Workspaces.Get(ctx, ws); err != nil {
+		t.Errorf("workspace %q not found after PublishAll: %v", ws, err)
+	}
+	if _, err := c.Datastores.InWorkspace(ws).Get(ctx, mgr.Datastore.Name); err != nil {
+		t.Errorf("datastore %q not found after PublishAll: %v", mgr.Datastore.Name, err)
+	}
+}
+
 // TestPublishGeoJSON_EndToEnd_Integration exercises the full pipeline:
 // open a GeoJSON via GDAL, copy it into PostGIS via OGR's PostgreSQL
 // driver, then publish the resulting table as a GeoServer feature type.

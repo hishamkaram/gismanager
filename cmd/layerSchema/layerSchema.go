@@ -34,20 +34,14 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	files, _ := gismanager.GetGISFiles(manager.Source.Path)
-	for _, file := range files {
-		source, srcErr := manager.OpenSource(ctx, file, 0)
-		if srcErr != nil {
-			slog.Error("open source", "file", file, "err", srcErr)
+	for item, walkErr := range manager.Walk(ctx) {
+		if walkErr != nil {
+			slog.Error("walk", "err", walkErr)
 			continue
 		}
-		for index := 0; index < source.LayerCount(); index++ {
-			layer := source.LayerByIndex(index)
-			gLayer := gismanager.GdalLayer{Layer: &layer}
-			fmt.Println(layer.Name())
-			for _, f := range gLayer.GetLayerSchema() {
-				fmt.Printf("\n%+v\n", *f)
-			}
+		fmt.Println(item.Layer.Name())
+		for _, f := range item.Layer.GetLayerSchema() {
+			fmt.Printf("\n%+v\n", *f)
 		}
 	}
 	return nil
