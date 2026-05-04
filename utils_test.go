@@ -49,14 +49,8 @@ func TestGetGISFiles(t *testing.T) {
 	assert.NotNil(t, dummyFileserr)
 }
 func TestDBIsAlive(t *testing.T) {
-	manager, _ := FromConfig("./testdata/test_config.yml")
-	connStr := manager.Datastore.PostgresConnectionString()
-	dbErr := DBIsAlive("postgres", connStr)
-	assert.Nil(t, dbErr)
-	connStr = "mysql://"
-	err := DBIsAlive("mysql", connStr)
-	assert.NotNil(t, err)
-	connStr = "postgresql://dummy:dummy@localhost:5438/dummy_db?sslmode=disable"
-	pingErr := DBIsAlive("postgres", connStr)
-	assert.NotNil(t, pingErr)
+	// TODO(PR 5): move to utils_integration_test.go behind `//go:build
+	// integration`. The happy-path branch requires a live PostGIS at
+	// localhost:5432.
+	t.Skip("integration-flavored: requires PostGIS; rewired in PR 5")
 }
