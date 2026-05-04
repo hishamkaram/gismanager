@@ -20,23 +20,29 @@ import (
 //
 // Returns errors wrapping [ErrConfigInvalid]; recover the underlying
 // os/yaml error via [errors.As].
-func FromConfig(configFile string) (config *ManagerConfig, err error) {
-	gpkgConfig := ManagerConfig{}
-	gpkgConfig.logger = GetLogger()
+//
+// Programmatic callers (no YAML file) should prefer [New] with [Option]
+// helpers like [WithGeoserver] / [WithDatastore] / [WithSource] /
+// [WithLogger]. FromConfig now delegates to New after the YAML decode.
+func FromConfig(configFile string) (*ManagerConfig, error) {
+	logger := GetLogger()
 	absPath, _ := filepath.Abs(configFile)
 	yamlFile, readErr := os.ReadFile(absPath) //nolint:gosec // G304: configFile is the operator-supplied --config path; reading it is the documented entry point.
 	if readErr != nil {
-		gpkgConfig.logger.Error("read yaml", "path", absPath, "err", readErr)
-		err = newGISError("FromConfig", absPath, ErrConfigInvalid, readErr)
-		return
+		logger.Error("read yaml", "path", absPath, "err", readErr)
+		return nil, newGISError("FromConfig", absPath, ErrConfigInvalid, readErr)
 	}
-	if unmarshalErr := yaml.Unmarshal(yamlFile, &gpkgConfig); unmarshalErr != nil {
-		gpkgConfig.logger.Error("unmarshal yaml", "path", absPath, "err", unmarshalErr)
-		err = newGISError("FromConfig", absPath, ErrConfigInvalid, unmarshalErr)
-		return
+	var decoded ManagerConfig
+	if unmarshalErr := yaml.Unmarshal(yamlFile, &decoded); unmarshalErr != nil {
+		logger.Error("unmarshal yaml", "path", absPath, "err", unmarshalErr)
+		return nil, newGISError("FromConfig", absPath, ErrConfigInvalid, unmarshalErr)
 	}
-	config = &gpkgConfig
-	return
+	return New(
+		WithLogger(logger),
+		WithGeoserver(decoded.Geoserver),
+		WithDatastore(decoded.Datastore),
+		WithSource(decoded.Source),
+	)
 }
 
 func isSupported(ext string) bool {

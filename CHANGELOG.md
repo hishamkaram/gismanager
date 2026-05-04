@@ -4,6 +4,10 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+### Added
+
+- **Functional-options constructor.** New `gismanager.New(opts ...Option) (*ManagerConfig, error)` plus `WithLogger` / `WithGeoserver` / `WithDatastore` / `WithSource` helpers. Programmatic callers can now build a manager without a YAML file and inject a custom `*slog.Logger`. `FromConfig(yamlPath)` keeps working — internally delegates to `New` after the YAML decode. `WithLogger(nil)` falls back to the default `GetLogger()` so a zero-arg `New()` is usable.
+
 ## [1.0.0] — 2026-05-04
 
 ### Context
