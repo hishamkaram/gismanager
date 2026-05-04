@@ -1,15 +1,18 @@
 package gismanager
 
-import "github.com/sirupsen/logrus"
+import (
+	"log/slog"
+	"os"
+)
 
-// GetLogger returns the project's default logrus logger.
+// GetLogger returns the project's default structured logger: a stdlib
+// *slog.Logger writing text-formatted records to stderr.
 //
-// TODO(PR 4): replace with *slog.Logger per CLAUDE.md's logging rule.
-func GetLogger() (logger *logrus.Logger) {
-	logger = logrus.New()
-	Formatter := new(logrus.TextFormatter)
-	Formatter.TimestampFormat = "02-01-2006 15:04:05"
-	Formatter.FullTimestamp = true
-	logger.Formatter = Formatter
-	return
+// Callers building their own pipeline should construct an *slog.Logger
+// directly (any handler — JSON, lumberjack-rotated, otel, etc.) and pass
+// it on the [ManagerConfig].logger field via the constructor (PR 4 still
+// loads it from FromConfig + GetLogger; functional-options constructor
+// lands in a follow-up).
+func GetLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, nil))
 }

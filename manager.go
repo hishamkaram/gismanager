@@ -1,13 +1,13 @@
 package gismanager
 
 import (
-	"errors"
+	"context"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
 	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/lukeroth/gdal"
-	"github.com/sirupsen/logrus"
 )
 
 // GeoserverConfig holds the GeoServer endpoint and credentials. WorkspaceName
@@ -31,7 +31,7 @@ type ManagerConfig struct {
 	Geoserver GeoserverConfig `yaml:"geoserver"`
 	Datastore DatastoreConfig `yaml:"datastore"`
 	Source    SourceConfig    `yaml:"source"`
-	logger    *logrus.Logger
+	logger    *slog.Logger
 }
 
 // GetGeoserverCatalog returns a GeoServer v2 client configured against the
@@ -46,23 +46,34 @@ func (manager *ManagerConfig) GetGeoserverCatalog() (*geoserver.Client, error) {
 }
 
 // OpenSource opens a GDAL data source at the given path. access is the GDAL
-// permission flag (0 read-only, 1 read-write).
-func (manager *ManagerConfig) OpenSource(path string, access int) (source *gdal.DataSource, ok bool) {
+// permission flag (0 read-only, 1 read-write). ctx is reserved for future
+// cancellation support — GDAL bindings don't propagate it today, but
+// callers should still pass a real context so a downstream-aware version
+// is a non-breaking swap.
+//
+// Errors wrap [ErrUnsupportedFormat] (driver lookup failed) or
+// [ErrInvalidDatasource] (driver matched but Open returned !ok). Match via
+// [errors.Is]; recover details via [errors.As] into *GISError.
+func (manager *ManagerConfig) OpenSource(_ context.Context, path string, access int) (*gdal.DataSource, error) {
 	driver, err := manager.GetDriver(path)
 	if err != nil {
-		manager.logger.Error(err)
-		ok = false
-		return
+		// GetDriver already logged + wrapped; just return.
+		return nil, err
 	}
-	targetSource, success := driver.Open(path, access)
-	source = &targetSource
-	ok = success
-	return
+	targetSource, ok := driver.Open(path, access)
+	if !ok {
+		manager.logger.Error("open source", "path", path, "access", access)
+		return nil, newGISError("OpenSource", path, ErrInvalidDatasource, nil)
+	}
+	return &targetSource, nil
 }
 
 // GetDriver returns the OGR driver appropriate for the given path or
 // connection string. PostgreSQL connection strings (matching pgRegex) get
 // the PostgreSQL driver; everything else dispatches on file extension.
+//
+// On unsupported extensions, returns an error wrapping
+// [ErrUnsupportedFormat] (match via [errors.Is]).
 func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err error) {
 	if pgRegex.MatchString(path) {
 		driver = gdal.OGRDriverByName(postgreSQLDriver)
@@ -77,8 +88,8 @@ func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err
 		case ".kml":
 			driver = gdal.OGRDriverByName(kmlDriver)
 		default:
-			err = errors.New("can't find the proper driver")
-			manager.logger.Error(err)
+			err = newGISError("GetDriver", path, ErrUnsupportedFormat, nil)
+			manager.logger.Error("get driver", "path", path, "err", err)
 		}
 	}
 	return

@@ -12,7 +12,7 @@ import (
 func TestGetFeatures(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")
 	files, _ := GetGISFiles(manager.Source.Path)
-	source, _ := manager.OpenSource(files[0], 1)
+	source, _ := manager.OpenSource(context.Background(), files[0], 1)
 	layer := source.LayerByIndex(0)
 	gLayer := GdalLayer{
 		Layer: &layer,
@@ -26,7 +26,7 @@ func TestGetFeatures(t *testing.T) {
 func TestGetLayerSchema(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")
 	files, _ := GetGISFiles(manager.Source.Path)
-	source, _ := manager.OpenSource(files[0], 1)
+	source, _ := manager.OpenSource(context.Background(), files[0], 1)
 	layer := source.LayerByIndex(0)
 	gLayer := GdalLayer{
 		Layer: &layer,
@@ -55,13 +55,13 @@ func (suite *ManagerLayerSuite) SetupSuite() {
 func (suite *ManagerLayerSuite) TestLayerOperations() {
 	manager := suite.manager
 	files, _ := GetGISFiles(manager.Source.Path)
-	source, _ := manager.OpenSource(files[0], 1)
+	source, _ := manager.OpenSource(context.Background(), files[0], 1)
 	layer := source.LayerByIndex(0)
 	gLayer := GdalLayer{
 		Layer: &layer,
 	}
 	dummyGLayer := GdalLayer{}
-	targetSource, _ := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
+	targetSource, _ := manager.OpenSource(context.Background(), manager.Datastore.BuildConnectionString(), 1)
 	nilStore, nilStoreErr := gLayer.LayerToPostgis(nil, manager, true)
 	assert.Nil(suite.T(), nilStore)
 	assert.NotNil(suite.T(), nilStoreErr)

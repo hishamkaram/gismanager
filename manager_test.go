@@ -1,6 +1,8 @@
 package gismanager
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/lukeroth/gdal"
@@ -29,13 +31,16 @@ func TestFromConfig(t *testing.T) {
 }
 func TestOpenSource(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")
-	datasource, ok := manager.OpenSource("./testdata/sample.gpkg", 0)
-	assert.True(t, ok)
-	assert.NotNil(t, datasource)
-	nilDatasource, fail := manager.OpenSource("./testdata/sample_dummy.xml", 0)
-	assert.False(t, fail)
-	assert.Nil(t, nilDatasource)
+	ctx := context.Background()
 
+	datasource, err := manager.OpenSource(ctx, "./testdata/sample.gpkg", 0)
+	assert.Nil(t, err)
+	assert.NotNil(t, datasource)
+
+	nilDatasource, formatErr := manager.OpenSource(ctx, "./testdata/sample_dummy.xml", 0)
+	assert.Nil(t, nilDatasource)
+	assert.True(t, errors.Is(formatErr, ErrUnsupportedFormat),
+		"expected ErrUnsupportedFormat, got %v", formatErr)
 }
 func TestGetGeoserverCatalog(t *testing.T) {
 	manager, _ := FromConfig("./testdata/test_config.yml")

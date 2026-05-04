@@ -30,23 +30,30 @@ type LayerField struct {
 // The flow uses the v2 client's "Get + ErrNotFound" idiom (v2 has no Exists
 // methods): for each resource we try to Get it; only if Get returns
 // [geoserver.ErrNotFound] do we Create it. Any other error short-circuits.
+// PublishGeoserverLayer publishes the given GDAL layer as a GeoServer
+// feature type, ensuring the configured workspace and PostGIS datastore
+// exist first.
+//
+// Errors are wrapped with [ErrGeoServerPublish]; the underlying
+// *geoserver.APIError is recoverable via [errors.As] for fields and
+// [errors.Is] against the v2 sentinels (e.g. ErrConflict, ErrServerError).
 func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *GdalLayer) error {
 	catalog, err := manager.GetGeoserverCatalog()
 	if err != nil {
-		manager.logger.Error(err)
-		return fmt.Errorf("gismanager: build geoserver client: %w", err)
+		manager.logger.Error("build geoserver client", "err", err)
+		return newGISError("PublishGeoserverLayer", "", ErrGeoServerPublish, err)
 	}
 
 	ws := manager.Geoserver.WorkspaceName
 	if err := ensureWorkspace(ctx, catalog, ws); err != nil {
-		manager.logger.Error(err)
-		return err
+		manager.logger.Error("ensure workspace", "workspace", ws, "err", err)
+		return newGISError("PublishGeoserverLayer", ws, ErrGeoServerPublish, err)
 	}
 
 	dsName := manager.Datastore.Name
 	if err := ensureDatastore(ctx, catalog, ws, manager.Datastore); err != nil {
-		manager.logger.Error(err)
-		return err
+		manager.logger.Error("ensure datastore", "workspace", ws, "datastore", dsName, "err", err)
+		return newGISError("PublishGeoserverLayer", ws+"/"+dsName, ErrGeoServerPublish, err)
 	}
 
 	layerName := layer.Name()
@@ -56,8 +63,8 @@ func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *
 		Enabled:    true,
 	}
 	if err := catalog.FeatureTypes.InWorkspace(ws).InDatastore(dsName).Create(ctx, ft); err != nil {
-		manager.logger.Error(err)
-		return fmt.Errorf("gismanager: publish feature type %q: %w", layerName, err)
+		manager.logger.Error("publish feature type", "workspace", ws, "datastore", dsName, "layer", layerName, "err", err)
+		return newGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, ErrGeoServerPublish, err)
 	}
 	return nil
 }
@@ -66,10 +73,10 @@ func ensureWorkspace(ctx context.Context, c *geoserver.Client, name string) erro
 	if _, err := c.Workspaces.Get(ctx, name); err == nil {
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
-		return fmt.Errorf("gismanager: get workspace %q: %w", name, err)
+		return fmt.Errorf("get workspace %q: %w", name, err)
 	}
 	if err := c.Workspaces.Create(ctx, &workspaces.Workspace{Name: name}); err != nil {
-		return fmt.Errorf("gismanager: create workspace %q: %w", name, err)
+		return fmt.Errorf("create workspace %q: %w", name, err)
 	}
 	return nil
 }
@@ -79,7 +86,7 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 	if _, err := scoped.Get(ctx, ds.Name); err == nil {
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
-		return fmt.Errorf("gismanager: get datastore %q: %w", ds.Name, err)
+		return fmt.Errorf("get datastore %q: %w", ds.Name, err)
 	}
 	conn := datastores.PostGIS{
 		Name:     ds.Name,
@@ -90,7 +97,7 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 		Password: ds.DBPass,
 	}
 	if err := scoped.Create(ctx, conn); err != nil {
-		return fmt.Errorf("gismanager: create datastore %q: %w", ds.Name, err)
+		return fmt.Errorf("create datastore %q: %w", ds.Name, err)
 	}
 	return nil
 }
@@ -99,19 +106,22 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 // (typically a PostGIS-enabled database opened via the OGR PG: driver),
 // preserving the geometry column name and optionally overwriting an existing
 // table of the same name.
+//
+// Returns errors wrapping [ErrPostGISConnect] (PostGIS unreachable),
+// [ErrInvalidDatasource] (nil targetSource), or [ErrInvalidLayer] (nil
+// embedded *gdal.Layer). Match via [errors.Is].
 func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *ManagerConfig, overwrite bool) (newLayer *GdalLayer, err error) {
 	connStr := manager.Datastore.PostgresConnectionString()
-	dbErr := DBIsAlive("postgres", connStr)
-	if dbErr != nil {
-		err = dbErr
+	if dbErr := DBIsAlive("postgres", connStr); dbErr != nil {
+		err = newGISError("LayerToPostgis", manager.Datastore.Name, ErrPostGISConnect, dbErr)
 		return
 	}
 	if targetSource == nil {
-		err = errors.New("invalid datasource")
+		err = newGISError("LayerToPostgis", "", ErrInvalidDatasource, nil)
 		return
 	}
 	if layer.Layer == nil {
-		err = errors.New("invalid layer")
+		err = newGISError("LayerToPostgis", "", ErrInvalidLayer, nil)
 		return
 	}
 	datasource := *targetSource
@@ -173,9 +183,9 @@ func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 	if layer.Layer != nil {
 		count, ok := layer.FeatureCount(true)
 		if !ok {
-			logger.Error("Could not read features")
+			logger.Error("could not read features")
 		} else {
-			logger.Infof("We Found %d Feature", count)
+			logger.Info("read features", "count", count)
 			for index := 0; index < count; index++ {
 				f := layer.Feature(int64(index))
 				features = append(features, &f)

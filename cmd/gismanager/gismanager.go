@@ -8,50 +8,62 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"log/slog"
 	"os"
 
 	"github.com/hishamkaram/gismanager"
 )
 
 func main() {
+	if err := run(context.Background()); err != nil {
+		slog.Error("gismanager", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
 	logger := gismanager.GetLogger()
 	configFile := flag.String("config", "", "Config File")
 	flag.Parse()
 	if *configFile == "" {
-		panic(errors.New("config: --config parameter is required"))
+		return errors.New("config: --config parameter is required")
 	}
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
-		panic(errors.New("config: file does not exist"))
+		return errors.New("config: file does not exist")
 	}
-	manager, confErr := gismanager.FromConfig(*configFile)
-	if confErr != nil {
-		panic(confErr)
+	manager, err := gismanager.FromConfig(*configFile)
+	if err != nil {
+		return err
 	}
-	ctx := context.Background()
 	files, _ := gismanager.GetGISFiles(manager.Source.Path)
 	for _, file := range files {
-		source, ok := manager.OpenSource(file, 0)
-		targetSource, targetOK := manager.OpenSource(manager.Datastore.BuildConnectionString(), 1)
-		if ok && targetOK {
-			for index := 0; index < source.LayerCount(); index++ {
-				layer := source.LayerByIndex(index)
-				gLayer := gismanager.GdalLayer{
-					Layer: &layer,
-				}
-				newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true)
-				if postgisErr != nil {
-					logger.Error(postgisErr)
-					continue
-				}
-				if newLayer == nil || newLayer.Layer == nil {
-					continue
-				}
-				if err := manager.PublishGeoserverLayer(ctx, newLayer); err != nil {
-					logger.Error(err)
-					continue
-				}
-				logger.Info("published")
+		source, srcErr := manager.OpenSource(ctx, file, 0)
+		if srcErr != nil {
+			logger.Error("open source", "file", file, "err", srcErr)
+			continue
+		}
+		targetSource, dsErr := manager.OpenSource(ctx, manager.Datastore.BuildConnectionString(), 1)
+		if dsErr != nil {
+			logger.Error("open postgis target", "err", dsErr)
+			continue
+		}
+		for index := 0; index < source.LayerCount(); index++ {
+			layer := source.LayerByIndex(index)
+			gLayer := gismanager.GdalLayer{Layer: &layer}
+			newLayer, postgisErr := gLayer.LayerToPostgis(targetSource, manager, true)
+			if postgisErr != nil {
+				logger.Error("load to postgis", "file", file, "err", postgisErr)
+				continue
 			}
+			if newLayer == nil || newLayer.Layer == nil {
+				continue
+			}
+			if err := manager.PublishGeoserverLayer(ctx, newLayer); err != nil {
+				logger.Error("publish", "file", file, "err", err)
+				continue
+			}
+			logger.Info("published", "file", file, "layer", newLayer.Name())
 		}
 	}
+	return nil
 }

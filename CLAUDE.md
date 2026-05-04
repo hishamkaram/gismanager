@@ -47,15 +47,16 @@ gismanager is **context-first**: every exported method on `*Manager` takes `ctx 
 
 ## Typed errors
 
-- Sentinel set in `errors.go`: `ErrNoDriver`, `ErrUnsupportedFormat`, `ErrInvalidLayer`, `ErrPostGISConnect`, `ErrGeoServerPublish`, `ErrNoSourcesFound`.
-- Typed `*GISError` with `Op`, `Source`, `Cause` fields, `errors.Is`/`As` semantics. Wraps `*geoserver.APIError` and underlying GDAL / PostGIS errors with `%w`.
+- Sentinels live in `errors.go`: `ErrConfigInvalid`, `ErrUnsupportedFormat`, `ErrInvalidLayer`, `ErrInvalidDatasource`, `ErrPostGISConnect`, `ErrGeoServerPublish`, `ErrNoSourcesFound`.
+- Typed `*GISError` with `Op`, `Source`, `Sentinel`, `Cause` fields and `errors.Is`/`As` semantics. `Unwrap` returns the underlying cause; `Is` matches the sentinel. The `*geoserver.APIError` from the v2 client is recoverable via `errors.As` against the wrapped cause.
 - **Never compare error strings.** `errors.Is(err, ErrXxx)` is the only correct test.
+- All public methods that can fail return wrapped `*GISError` (covered by tests in `errors_test.go`).
 
 ## Logging
 
-- `*slog.Logger` directly. No wrapper, no `logrus`. Configure via `WithLogger(l *slog.Logger)`. Default is `slog.New(slog.DiscardHandler)` (silent).
-- Internal call sites use structured logging — `logger.Debug(msg, args...)` with key/value pairs, not printf-style.
-- Library logs Debug for HTTP/GDAL details, Warn for retry-exhausted or unexpected wire shapes, Error for protocol violations or deserialization failures. No Info chatter.
+- `*slog.Logger` directly (since PR 4). No wrapper, no `logrus`. The default `GetLogger()` returns a stderr text-handler logger; production callers should construct their own `*slog.Logger` with whatever handler they want and pass it on `ManagerConfig.logger` (functional-options constructor lands later).
+- Internal call sites use structured logging — `logger.Error("operation", "key", value, "err", err)` with key/value pairs, not printf-style.
+- Library logs Debug for transient details, Warn for retry-exhausted or unexpected wire shapes, Error for failed external calls (PostGIS, GeoServer, file read). No Info chatter from the library; `cmd/*` may emit Info on successful publish events.
 
 ## Concurrency
 
