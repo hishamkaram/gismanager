@@ -8,6 +8,12 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 - **Functional-options constructor.** New `gismanager.New(opts ...Option) (*ManagerConfig, error)` plus `WithLogger` / `WithGeoserver` / `WithDatastore` / `WithSource` helpers. Programmatic callers can now build a manager without a YAML file and inject a custom `*slog.Logger`. `FromConfig(yamlPath)` keeps working — internally delegates to `New` after the YAML decode. `WithLogger(nil)` falls back to the default `GetLogger()` so a zero-arg `New()` is usable.
 - **`(*ManagerConfig).NewLayer(*gdal.Layer) *GdalLayer`.** Stamps the manager's logger onto the wrapper so per-manager logger configuration (custom handler, default attrs) reaches helper methods like `GetLayerSchema`, `GetFeatures`, etc. The zero-value `GdalLayer{Layer: l}` form is still supported — methods that need a logger fall back to `GetLogger()` when the field is nil.
+- **`(*ManagerConfig).Walk(ctx) iter.Seq2[WalkItem, error]`.** Streams `(file, layer)` pairs over every supported GIS file under `Source.Path`. Files-outer / layers-inner ordering. Per-file failures yield a non-nil `error` so callers can `continue`; the iterator never aborts the whole walk on one bad file. Bounds memory to one file's worth of OGR state by `defer source.Destroy()`-ing each `*gdal.DataSource` before moving on. Honors `ctx.Err()` between files and between layers.
+- **`(*ManagerConfig).PublishAll(ctx) error`.** Convenience method wrapping `Walk + LayerToPostgis + PublishGeoserverLayer` — the body of `cmd/gismanager`'s main loop, now reusable from any caller. Opens the PostGIS datastore once at the top and re-uses it across every file. Per-layer failures are logged via the manager's logger; only setup failures surface as a returned error.
+
+### Changed
+
+- **CLIs simplified.** `cmd/gismanager` is now ~10 lines (calls `manager.PublishAll(ctx)`); `cmd/layerSchema` is ~20 lines (iterates `manager.Walk(ctx)`). Both lost the duplicated walk-files → open-source → iterate-layers loop they reimplemented.
 
 ## [1.0.0] — 2026-05-04
 
