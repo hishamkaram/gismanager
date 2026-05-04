@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,18 +17,22 @@ import (
 )
 
 // FromConfig loads a ManagerConfig from a YAML file at the given path.
+//
+// Returns errors wrapping [ErrConfigInvalid]; recover the underlying
+// os/yaml error via [errors.As].
 func FromConfig(configFile string) (config *ManagerConfig, err error) {
 	gpkgConfig := ManagerConfig{}
 	gpkgConfig.logger = GetLogger()
 	absPath, _ := filepath.Abs(configFile)
-	yamlFile, err := os.ReadFile(absPath)
-	if err != nil {
-		gpkgConfig.logger.Errorf("yamlFile.Get err   %v ", err)
+	yamlFile, readErr := os.ReadFile(absPath) //nolint:gosec // G304: configFile is the operator-supplied --config path; reading it is the documented entry point.
+	if readErr != nil {
+		gpkgConfig.logger.Error("read yaml", "path", absPath, "err", readErr)
+		err = newGISError("FromConfig", absPath, ErrConfigInvalid, readErr)
 		return
 	}
-	err = yaml.Unmarshal(yamlFile, &gpkgConfig)
-	if err != nil {
-		gpkgConfig.logger.Errorf("Unmarshal: %v", err)
+	if unmarshalErr := yaml.Unmarshal(yamlFile, &gpkgConfig); unmarshalErr != nil {
+		gpkgConfig.logger.Error("unmarshal yaml", "path", absPath, "err", unmarshalErr)
+		err = newGISError("FromConfig", absPath, ErrConfigInvalid, unmarshalErr)
 		return
 	}
 	config = &gpkgConfig
@@ -119,21 +122,21 @@ func preprocessFile(filePath string, tempPath string) (finalPath string, err err
 	switch ext {
 	case ".zip":
 		newDir, tempDirErr := os.MkdirTemp(tempPath, "zipped_shapeFile")
-		fmt.Println(newDir)
 		if tempDirErr != nil {
-			logger.Error(tempDirErr)
+			logger.Error("create temp dir", "parent", tempPath, "err", tempDirErr)
 			err = tempDirErr
 			return
 		}
+		logger.Debug("preprocess: created temp dir", "dir", newDir)
 		unzipErr := zippedShapeFile(filePath, newDir)
 		if unzipErr != nil {
-			logger.Error(unzipErr)
+			logger.Error("unzip", "src", filePath, "dest", newDir, "err", unzipErr)
 			err = unzipErr
 			return
 		}
 		files, filesErr := GetGISFiles(newDir)
 		if filesErr != nil {
-			logger.Error(filesErr)
+			logger.Error("scan extracted dir", "dir", newDir, "err", filesErr)
 			err = filesErr
 			return
 		}
