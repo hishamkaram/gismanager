@@ -35,14 +35,20 @@ ENV DEBIAN_FRONTEND=noninteractive
 # distro's libgdal-dev (Ubuntu 24's GDAL 3.6, libgdal.so.34) clobbers the
 # bundled GDAL and produces binaries linked against the wrong soname. See
 # https://github.com/OSGeo/gdal/blob/master/docker/README.md.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+#
+# We don't apt-install libpq-dev — lib/pq is pure-Go and doesn't need C
+# headers. We also don't install postgresql-client (psql) — gismanager
+# never shells out to psql; the integration tests connect via Go's
+# database/sql.
+#
+# Acquire::Retries=3 is apt's native retry — preferred over a shell loop
+# wrapper because it retries at the per-package level and survives
+# partial-progress failures cleanly. Same flag in ci.yml + codeql.yml.
+RUN apt-get -o Acquire::Retries=3 update \
+    && apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
         build-essential \
-        ca-certificates \
-        curl \
         git \
-        libpq-dev \
         pkg-config \
-        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go from the official tarball (Ubuntu's apt go is usually older than
@@ -93,10 +99,9 @@ RUN go mod download \
 # ---------------------------------------------------------------------------
 FROM ghcr.io/osgeo/gdal:ubuntu-small-${GDAL_VERSION} AS runtime
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+# No apt-install: the OSGeo base already provides ca-certificates +
+# libpq5 (lib/pq's runtime dep). Skipping apt makes the runtime stage
+# a one-shot copy of the binaries.
 
 COPY --from=build /out/gismanager /usr/local/bin/gismanager
 COPY --from=build /out/layerSchema /usr/local/bin/layerSchema
