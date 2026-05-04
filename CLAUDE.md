@@ -89,18 +89,18 @@ gismanager is **context-first**: every exported method on `*Manager` takes `ctx 
 
 ## Index of project Claude config
 
-Subagents (delegated workers, own context window) — *populated in PR 6:*
+Subagents (delegated workers, own context window):
 
-- `go-reviewer` — Go-idiom review of changed files (adapted from the geoserver repo).
-- `integration-runner` — boots the gismanager compose stack, runs integration suite, dumps logs on failure.
-- `gdal-reviewer` — CGo + GDAL-binding review (catches Feature/int64 drift, leaked OGR handles, etc.).
+- `go-reviewer` — Go-idiom review of changed files: errors.Is/As over string-matching, ctx-first method shape, slog discipline, no library-code panics, the `*GISError` sentinel-wrapping contract.
+- `integration-runner` — boots the gismanager compose-test stack, runs the integration suite, dumps logs on failure.
+- `gdal-reviewer` — CGo + `lukeroth/gdal`-binding review: integer-width drift (`Layer.Feature(int64)`), OGR handle ownership / Destroy semantics, soname pinning, OGR driver-name constants.
 
-Skills (loadable knowledge / procedures) — *populated in PR 6:*
+Skills (loadable knowledge / procedures):
 
-- `/gismanager-quirks` — catalog of GDAL-binding quirks the codebase works around.
-- `/docker-only-dev` — reference for the "shell every Go command into Docker" pattern.
+- `/gismanager-quirks` — catalog of GDAL-binding + GeoServer wire-format quirks the codebase works around (auto-loads on relevant edits).
+- `/docker-only-dev` — reference for the "shell every Go command into Docker" pattern (auto-loads on build/test/run questions).
 
-Slash commands (callable recipes) — *populated in PR 6:*
+Slash commands (callable recipes):
 
-- `/integration-test` — boot compose stack and run integration suite.
+- `/integration-test [version]` — boot compose-test stack and run integration suite (default 2.28.0; pass `2.27` for the LTS leg).
 - `/lint-fix` — golangci-lint with autofix + gofmt + goimports, all in-container.
