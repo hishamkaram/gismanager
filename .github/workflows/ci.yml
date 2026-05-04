@@ -38,15 +38,20 @@ jobs:
       image: ghcr.io/osgeo/gdal:ubuntu-small-3.12.4
     steps:
       - name: Install build essentials
-        # build-essential / git come from noble/main, pkg-config from
-        # noble/universe — both reliably mirrored. We tolerate
-        # apt-get update failure because Ubuntu's noble-security archive
-        # occasionally serves files that mismatch its InRelease metadata
-        # by one byte (mid-mirror-sync); install only needs the indexes
-        # that did fetch. Acquire::Retries handles purely transient HTTP
-        # errors at the per-package level.
+        # Switch to Azure's Ubuntu mirror (co-located with the GHA runner
+        # network in Azure) before any apt operation. The public
+        # archive.ubuntu.com mirror was returning connection-refused for
+        # several minutes during master CI on commit ff1f77f; Azure's
+        # mirror is what GHA-managed Ubuntu runners themselves use and is
+        # significantly more reliable.
         run: |
           set -ex
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sed -i \
+              -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              /etc/apt/sources.list.d/ubuntu.sources
+          fi
           apt-get -o Acquire::Retries=3 update || \
             echo "apt-get update returned nonzero — proceeding with whatever indexes did fetch"
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
@@ -74,15 +79,20 @@ jobs:
         go: ["1.25"]
     steps:
       - name: Install build essentials
-        # build-essential / git come from noble/main, pkg-config from
-        # noble/universe — both reliably mirrored. We tolerate
-        # apt-get update failure because Ubuntu's noble-security archive
-        # occasionally serves files that mismatch its InRelease metadata
-        # by one byte (mid-mirror-sync); install only needs the indexes
-        # that did fetch. Acquire::Retries handles purely transient HTTP
-        # errors at the per-package level.
+        # Switch to Azure's Ubuntu mirror (co-located with the GHA runner
+        # network in Azure) before any apt operation. The public
+        # archive.ubuntu.com mirror was returning connection-refused for
+        # several minutes during master CI on commit ff1f77f; Azure's
+        # mirror is what GHA-managed Ubuntu runners themselves use and is
+        # significantly more reliable.
         run: |
           set -ex
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sed -i \
+              -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              /etc/apt/sources.list.d/ubuntu.sources
+          fi
           apt-get -o Acquire::Retries=3 update || \
             echo "apt-get update returned nonzero — proceeding with whatever indexes did fetch"
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
@@ -115,15 +125,20 @@ jobs:
       image: ghcr.io/osgeo/gdal:ubuntu-small-3.12.4
     steps:
       - name: Install build essentials
-        # build-essential / git come from noble/main, pkg-config from
-        # noble/universe — both reliably mirrored. We tolerate
-        # apt-get update failure because Ubuntu's noble-security archive
-        # occasionally serves files that mismatch its InRelease metadata
-        # by one byte (mid-mirror-sync); install only needs the indexes
-        # that did fetch. Acquire::Retries handles purely transient HTTP
-        # errors at the per-package level.
+        # Switch to Azure's Ubuntu mirror (co-located with the GHA runner
+        # network in Azure) before any apt operation. The public
+        # archive.ubuntu.com mirror was returning connection-refused for
+        # several minutes during master CI on commit ff1f77f; Azure's
+        # mirror is what GHA-managed Ubuntu runners themselves use and is
+        # significantly more reliable.
         run: |
           set -ex
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sed -i \
+              -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+              /etc/apt/sources.list.d/ubuntu.sources
+          fi
           apt-get -o Acquire::Retries=3 update || \
             echo "apt-get update returned nonzero — proceeding with whatever indexes did fetch"
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \

@@ -41,15 +41,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 # never shells out to psql; the integration tests connect via Go's
 # database/sql.
 #
-# Acquire::Retries=3 is apt's native retry — preferred over a shell loop
-# wrapper because it retries at the per-package level and survives
-# partial-progress failures cleanly. Same flag in ci.yml + codeql.yml.
-RUN apt-get -o Acquire::Retries=3 update \
-    && apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+# Switch to Azure's Ubuntu mirror first (co-located with the GHA runner
+# network; significantly more reliable than the public archive.ubuntu.com
+# mirror, which periodically returns connection-refused). Then
+# Acquire::Retries=3 absorbs any per-package transient at the apt layer.
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+        sed -i \
+            -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+            -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' \
+            /etc/apt/sources.list.d/ubuntu.sources; \
+    fi; \
+    apt-get -o Acquire::Retries=3 update; \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
         build-essential \
         git \
-        pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+        pkg-config; \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Go from the official tarball (Ubuntu's apt go is usually older than
 # the active toolchain). Pin GO_VERSION at build time.
