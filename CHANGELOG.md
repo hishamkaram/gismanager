@@ -4,22 +4,26 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-05-04
+
+### Context
+
+Maintainability + structure improvements on top of v1.0.0. Five focused PRs (#11 → #15) sequenced by dependency. All changes are additive on the public surface; three soft deprecations (`GetFeatures`, `DBIsAlive`, `GetGeomtryName`) — bodies kept verbatim, callers warned via `// Deprecated:` to migrate at their own pace. Removal is a v2 break.
+
 ### Added
 
-- **Functional-options constructor.** New `gismanager.New(opts ...Option) (*ManagerConfig, error)` plus `WithLogger` / `WithGeoserver` / `WithDatastore` / `WithSource` helpers. Programmatic callers can now build a manager without a YAML file and inject a custom `*slog.Logger`. `FromConfig(yamlPath)` keeps working — internally delegates to `New` after the YAML decode. `WithLogger(nil)` falls back to the default `GetLogger()` so a zero-arg `New()` is usable.
-- **`(*ManagerConfig).NewLayer(*gdal.Layer) *GdalLayer`.** Stamps the manager's logger onto the wrapper so per-manager logger configuration (custom handler, default attrs) reaches helper methods like `GetLayerSchema`, `GetFeatures`, etc. The zero-value `GdalLayer{Layer: l}` form is still supported — methods that need a logger fall back to `GetLogger()` when the field is nil.
-- **`(*ManagerConfig).Walk(ctx) iter.Seq2[WalkItem, error]`.** Streams `(file, layer)` pairs over every supported GIS file under `Source.Path`. Files-outer / layers-inner ordering. Per-file failures yield a non-nil `error` so callers can `continue`; the iterator never aborts the whole walk on one bad file. Bounds memory to one file's worth of OGR state by `defer source.Destroy()`-ing each `*gdal.DataSource` before moving on. Honors `ctx.Err()` between files and between layers.
-- **`(*ManagerConfig).PublishAll(ctx) error`.** Convenience method wrapping `Walk + LayerToPostgis + PublishGeoserverLayer` — the body of `cmd/gismanager`'s main loop, now reusable from any caller. Opens the PostGIS datastore once at the top and re-uses it across every file. Per-layer failures are logged via the manager's logger; only setup failures surface as a returned error.
+- **Functional-options constructor.** `gismanager.New(opts ...Option) (*ManagerConfig, error)` + `WithLogger` / `WithGeoserver` / `WithDatastore` / `WithSource` helpers. Programmatic callers can now build a manager without a YAML file and inject a custom `*slog.Logger`. `FromConfig(yamlPath)` keeps working — internally delegates to `New` after the YAML decode. `WithLogger(nil)` falls back to the default `GetLogger()` so a zero-arg `New()` is usable. (PR #11)
+- **`(*ManagerConfig).NewLayer(*gdal.Layer) *GdalLayer`.** Stamps the manager's logger onto the wrapper so per-manager logger configuration reaches helper methods like `GetLayerSchema`, `GetFeatures`, etc. The zero-value `GdalLayer{Layer: l}` form is still supported — methods that need a logger fall back to `GetLogger()` when the field is nil. (PR #12)
+- **`(*ManagerConfig).Walk(ctx) iter.Seq2[WalkItem, error]`.** Streams `(file, layer)` pairs over every supported GIS file under `Source.Path`. Files-outer / layers-inner ordering. Per-file failures yield a non-nil `error` so callers can `continue`; the iterator never aborts the whole walk on one bad file. Bounds memory to one file's worth of OGR state by `defer source.Destroy()`-ing each `*gdal.DataSource` before moving on. Honors `ctx.Err()` between files and between layers. (PR #13)
+- **`(*ManagerConfig).PublishAll(ctx) error`.** Convenience wrapping `Walk + LayerToPostgis + PublishGeoserverLayer` — the body of `cmd/gismanager`'s main loop, now reusable from any caller. Opens the PostGIS datastore once at the top and re-uses it across every file. Per-layer failures are logged via the manager's logger; only setup failures surface as a returned error. (PR #13)
+- **`(*GdalLayer).Features(ctx) iter.Seq[gdal.Feature]`.** Streaming iterator that destroys each `gdal.Feature` as iteration advances and on early `break` (no caller-side cleanup contract). Honors `ctx.Err()` between feature reads. (PR #14)
+- **`DBIsAliveContext(ctx, dbType, conn)`.** Ctx-aware variant of `DBIsAlive`. The original `DBIsAlive` now delegates to this with `context.Background()`. (PR #14)
+- **`(*GdalLayer).GeometryName()`** — properly-spelled sibling of the deprecated `GetGeomtryName()`. Identical behaviour. (PR #15)
 
 ### Changed
 
-- **CLIs simplified.** `cmd/gismanager` is now ~10 lines (calls `manager.PublishAll(ctx)`); `cmd/layerSchema` is ~20 lines (iterates `manager.Walk(ctx)`). Both lost the duplicated walk-files → open-source → iterate-layers loop they reimplemented.
-- **`Walk` / `PublishAll` `defer source.Destroy()` automatically.** Per-file CGo handles are released between iterations; long-running pipelines no longer leak `*gdal.DataSource` handles. Direct callers of `OpenSource` remain responsible for their own `defer source.Destroy()` — documented in README.
-
-### Added (continued)
-
-- **`(*GdalLayer).Features(ctx) iter.Seq[gdal.Feature]`.** Streaming iterator that destroys each `gdal.Feature` as iteration advances and on early break (no caller-side cleanup contract). Honors `ctx.Err()` between feature reads.
-- **`DBIsAliveContext(ctx, dbType, conn)`.** Ctx-aware variant of `DBIsAlive`. The original `DBIsAlive` now delegates to this with `context.Background()`.
+- **CLIs simplified.** `cmd/gismanager` is now ~10 lines (calls `manager.PublishAll(ctx)`); `cmd/layerSchema` is ~20 lines (iterates `manager.Walk(ctx)`). Both lost the duplicated walk-files → open-source → iterate-layers loop they reimplemented. (PR #13)
+- **`Walk` / `PublishAll` `defer source.Destroy()` automatically.** Per-file CGo handles are released between iterations; long-running pipelines no longer leak `*gdal.DataSource` handles. Direct callers of `OpenSource` remain responsible for their own `defer source.Destroy()` — documented in README + `docs/architecture.md`. (PRs #13 + #14)
 
 ### Deprecated
 
@@ -27,17 +31,29 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 - **`DBIsAlive(dbType, conn)`.** Hard-codes `context.Background()`. Use `DBIsAliveContext` instead.
 - **`(*GdalLayer).GetGeomtryName()`.** Typo (missing 'e' in "Geometry"). Use `GeometryName()`.
 
+All three keep their bodies for v1.x back-compat; removal is a v2 break.
+
 ### Fixed
 
-- **KML files were silently dropped from directory walks** because `supportedEXT` had `"kml"` (no leading dot); `filepath.Ext()` always returns the dot, so the entry never matched. The bug was present since the project's first commit. Fixed: entry is now `".kml"`. A `testdata/sample.kml` fixture was added so directory-walk tests exercise the path.
-
-### Added (continued)
-
-- **`(*GdalLayer).GeometryName()`** — properly-spelled sibling of the deprecated `GetGeomtryName()`. Identical behaviour.
+- **KML files were silently dropped from directory walks** because `supportedEXT` had `"kml"` (no leading dot); `filepath.Ext()` always returns the dot, so the entry never matched. Bug present since the project's first commit (2018). Fixed: entry is now `".kml"`. A `testdata/sample.kml` fixture was added so directory-walk tests exercise the path. Two new guard tests (`TestSupportedEXT_AllHaveLeadingDot`, `TestSupportedEXT_IncludesKML`) prevent regression. (PR #15)
 
 ### Removed
 
-- **Unused unexported constants `openFileGDBDriver` and `esriJSONDriver`** in `vars.go`. They were never referenced from `GetDriver`'s switch and dropping them keeps the dispatch table honest. Unexported, no external API impact.
+- **Unused unexported constants `openFileGDBDriver` and `esriJSONDriver`** in `vars.go`. They were never referenced from `GetDriver`'s switch. Unexported, no external API impact. (PR #15)
+
+### Tests
+
+- New table-driven `driver_table_test.go` for `GetDriver` (~22 rows): every supported extension (lower / upper / mixed case), every `pgRegex`-matching PostgreSQL connection-string variant, unsupported categories (raster, csv, xml, no-extension, empty path, double extension), and the `.gdb`-listed-but-unrouted edge case.
+- New `walk_test.go`: Walk yields layers from testdata, early-break safe, `context.Cancel` honored, missing source surfaces error item, KML fixture appears in output.
+- New `lifecycle_test.go`: `Features` zero-value safety + ctx.Cancel handling, `DBIsAliveContext` fail-fast under canceled ctx, `DBIsAlive` back-compat.
+- New `layer_logger_test.go`: `NewLayer` stamps logger, custom-logger emission lands in caller-controlled buffer, `getGISFiles` forwards manager logger to `preprocessFile`.
+- New `options_test.go`: every `WithX`, `WithLogger(nil)` fallback, parity-with-FromConfig, last-write-wins ordering, nil-`Option` tolerated.
+
+### Known limitations (carried from v1.0.0)
+
+- **GDAL CGo dep** — runtime image is ~500 MB, dynamically linked against `libgdal.so.38`.
+- **No streaming publish.** Layers are materialized into PostGIS before publishing.
+- **`*gdal.DataSource` / `gdal.OGRDriver` / `*geoserver.Client` / `gdal.Feature` still leak on the public surface.** Callers must import `lukeroth/gdal` and `geoserver/v2`. Hiding these behind project-owned types is a v2 facade-pattern break.
 
 ## [1.0.0] — 2026-05-04
 
