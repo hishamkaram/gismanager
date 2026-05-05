@@ -36,16 +36,29 @@ Three CLI binaries plus a Go library covering two GIS workflows:
 
 ### Supported source formats
 
-Driven by GDAL's OGR drivers; whatever GDAL can read, gismanager can ingest. The currently dispatched extensions:
+The two surfaces have different reach.
 
-| Extension | Driver |
+#### Publish pipeline (`cmd/gismanager`, `Walk`, `PublishAll`)
+
+Driven by an explicit extension allowlist in [`vars.go::supportedEXT`](vars.go) — only these extensions are picked up by directory walks:
+
+| Extension | OGR driver |
 |---|---|
 | `.shp`, `.zip` (zipped shapefile bundle) | ESRI Shapefile |
 | `.geojson`, `.json` | GeoJSON |
 | `.gpkg` | GeoPackage |
 | `.kml` | KML |
 
-Zipped shapefile bundles are auto-extracted into a temp directory before the OGR open — see [`internal/zipx`](internal/zipx) for the stdlib `archive/zip`-based extractor (zip-slip rejection, 2 GiB per-entry cap).
+Zipped shapefile bundles are auto-extracted into a temp directory before the OGR open — see [`internal/zipx`](internal/zipx) for the stdlib `archive/zip`-based extractor (zip-slip rejection, 2 GiB per-entry cap). Adding a new extension to the publish pipeline means adding a row to `supportedEXT` and a switch case in [`manager.go::GetDriver`](manager.go).
+
+#### Conversion entry points *(v1.2+, `cmd/gisconvert`, `ConvertVector` / `ConvertRaster` / `ToCOG` / `ReprojectRaster`)*
+
+No allowlist — the conversion functions delegate straight to GDAL's full driver registry via `gdal.OpenEx`. Whatever the underlying GDAL build can read or write, the conversion entry points accept. In the project's dev image (`ghcr.io/osgeo/gdal:ubuntu-small-3.12.4`) that includes the obvious workhorses:
+
+- **Vector** (OGR): Shapefile, GeoPackage, GeoJSON, FlatGeobuf, KML, GML, GPX, MapInfo TAB/MIF, CSV (with WKT/lon-lat geometry), DGN, S-57, PostgreSQL/PostGIS, plus the cloud-native paths via VFS (`/vsis3/`, `/vsicurl/`, `/vsizip/`, `/vsimem/`, …).
+- **Raster** (GDAL): GeoTIFF, Cloud-Optimized GeoTIFF, JP2/OpenJPEG, PNG, JPEG, NITF, HFA (Erdas .img), VRT, plus the same VFS paths.
+
+For an authoritative list against any GDAL build, run `ogrinfo --formats` (vector) and `gdalinfo --formats` (raster) inside the dev container — driver compile-time inclusion varies across GDAL builds, and the dev image is the supported baseline.
 
 ## Install
 
