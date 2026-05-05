@@ -1,9 +1,10 @@
 # Testdata licenses
 
 Each row in `manifest.sha256` is a fixture downloaded into the gitignored
-`testdata/fetched/` directory at test time. None of the binary fixtures are
-distributed with this repository — we only ship the manifest and these
-license notes. Licenses below cover the upstream fixtures we *fetch*.
+`testdata-fetched/` directory (sibling of `testdata/`) at test time. None
+of the binary fixtures are distributed with this repository — we only
+ship the manifest and these license notes. Licenses below cover the
+upstream fixtures we *fetch*.
 
 ## Vector fixtures
 

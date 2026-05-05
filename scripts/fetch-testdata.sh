@@ -18,7 +18,7 @@
 set -euo pipefail
 
 MANIFEST="${MANIFEST:-testdata/manifest.sha256}"
-DEST="${DEST:-testdata/fetched}"
+DEST="${DEST:-testdata-fetched}"
 
 if ! command -v curl >/dev/null 2>&1; then
     echo "fetch-testdata: curl not found in PATH" >&2
