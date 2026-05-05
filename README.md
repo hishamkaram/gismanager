@@ -15,6 +15,7 @@ It exists because the path from "I have a shapefile" to "I have a published GeoS
 - [Install](#install)
 - [Quick start](#quick-start)
 - [Worked example: publish a directory of GIS files](#worked-example-publish-a-directory-of-gis-files)
+- [Conversion](#conversion)
 - [Errors](#errors)
 - [Configuration](#configuration)
 - [Library use](#library-use)
@@ -115,6 +116,42 @@ make compose-test-down
 ```
 
 Same idea programmatically (the integration suite is a worked example — see [`publish_integration_test.go`](publish_integration_test.go) `TestPublishGeoJSON_EndToEnd_Integration`).
+
+## Conversion
+
+Beyond the publish pipeline, gismanager (since v1.2) ships a stateless conversion subsystem that mirrors GDAL's three command-line workhorses:
+
+| Function | Wraps | Use case |
+|---|---|---|
+| `ConvertVector` | `ogr2ogr` | format conversion + reproject + bbox clip + attribute filter + simplify |
+| `ConvertRaster` | `gdal_translate` | format conversion + band subset + output window |
+| `ToCOG` | `gdal_translate -of COG` | Cloud-Optimized GeoTIFF (sane defaults pre-applied) |
+| `ReprojectRaster` | `gdalwarp` | raster reprojection + cookie-cutter clip via cutline |
+
+All four are top-level package functions — no `*ManagerConfig` required — and accept `/vsi*/`-prefixed paths transparently (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`).
+
+```go
+// Vector: 4326 GeoJSON → 3857 GeoPackage, clipped to Africa, simplified.
+err := gismanager.ConvertVector(ctx, "world.geojson", "africa.gpkg",
+    gismanager.WithVectorFormat("GPKG"),
+    gismanager.WithVectorOverwrite(),
+    gismanager.WithVectorTargetSRS("EPSG:3857"),
+    gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
+    gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
+    gismanager.WithVectorSimplify(100),
+)
+
+// Raster: GeoTIFF → COG with the canonical defaults.
+err = gismanager.ToCOG(ctx, "scene.tif", "scene.cog.tif")
+
+// Raster reprojection: UTM → Web Mercator.
+err = gismanager.ReprojectRaster(ctx, "utm.tif", "wm.tif",
+    "EPSG:32618", "EPSG:3857",
+    gismanager.WithRasterResamplingAlg("bilinear"),
+)
+```
+
+Full reference, more examples, and the cloud-I/O matrix: [`docs/conversions.md`](docs/conversions.md).
 
 ## Errors
 
