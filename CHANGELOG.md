@@ -6,6 +6,8 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ### Added
 
+- **`BuildVRT(ctx, dst, srcs, opts...) error`** — multi-raster mosaic into a Virtual Raster (the `gdalbuildvrt` equivalent). Useful for assembling tile pyramids from many GeoTIFFs, or stacking single-band inputs into RGBA via `WithVRTSeparate`. Options: `WithVRTLogger` / `WithVRTResolution` (highest|lowest|average|user) / `WithVRTUserResolution` / `WithVRTSeparate` / `WithVRTAddAlpha` / `WithVRTResamplingAlg` / `WithVRTSrcNoData` / `WithVRTNoData` / `WithVRTHideNoData` / `WithVRTBands` / `WithVRTAllowProjectionDifference` / `WithVRTRawOptions`. Errors wrap `ErrConvertFailed` with `Op="BuildVRT"`. (PR 2 of v1.3)
+
 - **`Rasterize(ctx, vectorSrc, rasterDst, opts...) error`** — vector → raster (the `gdal_rasterize` equivalent). Burn constant values via `WithRasterizeBurnValues` or per-feature attribute values via `WithRasterizeAttribute`; control output via `WithRasterizeFormat` / `WithRasterizeOutputType` / `WithRasterizeTargetResolution` / `WithRasterizeOutputSize` / `WithRasterizeOutputBounds` / `WithRasterizeLayer` / `WithRasterizeWhere` / `WithRasterizeCreationOption` / `WithRasterizeRawOptions`. Errors wrap `ErrConvertFailed` with `Op="Rasterize"`. (PR 1 of v1.3)
 
 ## [1.2.0] — 2026-05-05
