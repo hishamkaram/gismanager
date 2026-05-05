@@ -4,15 +4,46 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-05-05
+
+### Context
+
+Three new conversion operations + one binding-gap closer on top of v1.2.0. Four focused PRs (#27, #28, #29, #30) sequenced by dependency. All changes are additive — no breaking changes, no deprecations.
+
+The v1.2 series was about format conversion (file → file in a different shape). v1.3 broadens the conversion subsystem to cover the rest of GDAL's command-line workhorses: vector→raster (`gdal_rasterize`), multi-raster mosaic (`gdalbuildvrt`), and DEM analysis (`gdaldem`). Plus we close the silent-failure-on-unknown-driver gap documented in v1.2's known limitations.
+
 ### Added
 
-- **Driver pre-validation** for the conversion entry points. `WithVectorFormat` / `WithRasterFormat` / `WithRasterizeFormat` / `WithDEMFormat` values are now validated against the running GDAL driver registry via `gdal.GetDriverByName` before the C call. Unknown drivers surface as a clean `ErrConvertFailed` (with `Op` naming the entry point) instead of GDAL's silent fail-with-stderr-warning behavior. Closes the silent-failure gap documented in v1.2's CHANGELOG known limitations. (PR 4 of v1.3)
+- **`Rasterize(ctx, vectorSrc, rasterDst, opts...) error`** — vector → raster (the `gdal_rasterize` equivalent). Burn constant values via `WithRasterizeBurnValues` or per-feature attribute values via `WithRasterizeAttribute`; control output via `WithRasterizeFormat` / `WithRasterizeOutputType` / `WithRasterizeTargetResolution` / `WithRasterizeOutputSize` / `WithRasterizeOutputBounds` / `WithRasterizeLayer` / `WithRasterizeWhere` / `WithRasterizeCreationOption` / `WithRasterizeRawOptions`. Errors wrap `ErrConvertFailed` with `Op="Rasterize"`. (PR #27)
+- **`BuildVRT(ctx, dst, srcs, opts...) error`** — multi-raster mosaic into a Virtual Raster (the `gdalbuildvrt` equivalent). Useful for assembling tile pyramids from many GeoTIFFs, or stacking single-band inputs into RGBA via `WithVRTSeparate`. Options: `WithVRTLogger` / `WithVRTResolution` (highest|lowest|average|user) / `WithVRTUserResolution` / `WithVRTSeparate` / `WithVRTAddAlpha` / `WithVRTResamplingAlg` / `WithVRTSrcNoData` / `WithVRTNoData` / `WithVRTHideNoData` / `WithVRTBands` / `WithVRTAllowProjectionDifference` / `WithVRTRawOptions`. Errors wrap `ErrConvertFailed` with `Op="BuildVRT"`. (PR #28)
+- **`DEMProcessing(ctx, src, dst, mode, opts...) error`** — DEM raster analysis (the `gdaldem` equivalent). Supported modes: `hillshade`, `slope`, `aspect`, `color-relief` (requires `WithDEMColorFile`), `TRI`, `TPI`, `roughness`. Options: `WithDEMLogger` / `WithDEMFormat` / `WithDEMColorFile` / `WithDEMZFactor` / `WithDEMScale` / `WithDEMAzimuth` / `WithDEMAltitude` / `WithDEMCombined` / `WithDEMMultidirectional` / `WithDEMAlgorithm` (Horn|ZevenbergenThorne) / `WithDEMCreationOption` / `WithDEMOutputType` / `WithDEMRawOptions`. Empty mode and color-relief-without-color-file are pre-validated. Errors wrap `ErrConvertFailed` with `Op="DEMProcessing"`. (PR #29)
+- **Driver pre-validation** for every conversion entry point that takes a format option (`ConvertVector` / `ConvertRaster` / `ToCOG` / `ReprojectRaster` / `Rasterize` / `DEMProcessing`). `WithVectorFormat` / `WithRasterFormat` / `WithRasterizeFormat` / `WithDEMFormat` values are now validated against the running GDAL driver registry via `gdal.GetDriverByName` before the C call. Unknown drivers surface as a clean `ErrConvertFailed` instead of GDAL's silent fail-with-stderr-warning behavior. Closes the silent-failure gap documented in v1.2's CHANGELOG known limitations. (PR #30)
 
-- **`DEMProcessing(ctx, src, dst, mode, opts...) error`** — DEM raster analysis (the `gdaldem` equivalent). Supported modes: `hillshade`, `slope`, `aspect`, `color-relief` (requires `WithDEMColorFile`), `TRI`, `TPI`, `roughness`. Options: `WithDEMLogger` / `WithDEMFormat` / `WithDEMColorFile` / `WithDEMZFactor` / `WithDEMScale` / `WithDEMAzimuth` / `WithDEMAltitude` / `WithDEMCombined` / `WithDEMMultidirectional` / `WithDEMAlgorithm` (Horn|ZevenbergenThorne) / `WithDEMCreationOption` / `WithDEMOutputType` / `WithDEMRawOptions`. Errors wrap `ErrConvertFailed` with `Op="DEMProcessing"`. (PR 3 of v1.3)
+### Changed
 
-- **`BuildVRT(ctx, dst, srcs, opts...) error`** — multi-raster mosaic into a Virtual Raster (the `gdalbuildvrt` equivalent). Useful for assembling tile pyramids from many GeoTIFFs, or stacking single-band inputs into RGBA via `WithVRTSeparate`. Options: `WithVRTLogger` / `WithVRTResolution` (highest|lowest|average|user) / `WithVRTUserResolution` / `WithVRTSeparate` / `WithVRTAddAlpha` / `WithVRTResamplingAlg` / `WithVRTSrcNoData` / `WithVRTNoData` / `WithVRTHideNoData` / `WithVRTBands` / `WithVRTAllowProjectionDifference` / `WithVRTRawOptions`. Errors wrap `ErrConvertFailed` with `Op="BuildVRT"`. (PR 2 of v1.3)
+- **None.** All v1.3 additions are surface-additive — existing v1.x code paths are byte-for-byte unchanged.
 
-- **`Rasterize(ctx, vectorSrc, rasterDst, opts...) error`** — vector → raster (the `gdal_rasterize` equivalent). Burn constant values via `WithRasterizeBurnValues` or per-feature attribute values via `WithRasterizeAttribute`; control output via `WithRasterizeFormat` / `WithRasterizeOutputType` / `WithRasterizeTargetResolution` / `WithRasterizeOutputSize` / `WithRasterizeOutputBounds` / `WithRasterizeLayer` / `WithRasterizeWhere` / `WithRasterizeCreationOption` / `WithRasterizeRawOptions`. Errors wrap `ErrConvertFailed` with `Op="Rasterize"`. (PR 1 of v1.3)
+### Tests
+
+- 12-case table-driven unit test for `buildRasterizeArgs` option → `gdal_rasterize` arg mapping. (PR #27)
+- 10-case table-driven unit test for `buildVRTArgs` option → `gdalbuildvrt` arg mapping. (PR #28)
+- 9-case table-driven unit test for `buildDEMArgs` option → `gdaldem` arg mapping. (PR #29)
+- ctx-canceled fast-fail and source-open error wrapping for all three new entry points.
+- Empty-mode + color-relief-without-color-file pre-validation rejection for `DEMProcessing`. (PR #29)
+- Empty-sources rejection for `BuildVRT`. (PR #28)
+- 6-case unit test for the driver-registry validator. (PR #30)
+- 4 integration-validating tests confirming each entry point's `Op` field on the error envelope when given a bogus format. (PR #30)
+- Integration: Africa countries → 256×256 Byte GeoTIFF mask via `Rasterize` burn-value 1 with `-where` filter. (PR #27)
+- Integration: country `POP_EST` attribute → 360×180 Float32 raster via `Rasterize`. (PR #27)
+- Integration: two GeoTIFFs → mosaic VRT (default + `-separate` modes). (PR #28)
+- Integration: `RGB.byte.tif` → hillshade / slope / TRI via `DEMProcessing`. (PR #29)
+
+### Known limitations
+
+- **No progress callbacks.** Same as v1.2 — `lukeroth/gdal`'s utility wrappers don't thread `pfnProgress` through the C functions. Long conversions are opaque from the Go side. Tracked for v1.4+ (needs an upstream binding patch).
+- **No mid-conversion cancellation.** Same as v1.2 — `ctx` is honored at the function boundary, not inside the synchronous CGo call.
+- **Other silent-failure modes still possible.** Driver-name pre-validation closes the most common case, but invalid CRS strings, malformed `-spat` extents, and similar option-side errors can still slip past `cerr=0`. Use the dev container's `ogr2ogr` / `gdal_translate` / `gdalwarp` / `gdal_rasterize` CLIs to validate inputs ahead of programmatic use if you need a hard guarantee.
+- **No GeoParquet driver in the dev image.** The `ghcr.io/osgeo/gdal:ubuntu-small-3.12.4` base image doesn't include Apache Arrow / Parquet (`ubuntu-small` excludes the parquet driver). Swap to `ubuntu-full` if you need GeoParquet support; revisit in v1.4+.
 
 ## [1.2.0] — 2026-05-05
 

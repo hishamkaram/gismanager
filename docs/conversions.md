@@ -103,9 +103,95 @@ err := gismanager.ReprojectRaster(ctx, src, dst,
 warp command — pixels outside the polygon become NoData and the output
 extent shrinks to the polygon's envelope.
 
+## Vector → raster *(v1.3+)*
+
+### Burn polygons into a Byte mask
+
+```go
+err := gismanager.Rasterize(ctx, "countries.geojson", "africa_mask.tif",
+    gismanager.WithRasterizeFormat("GTiff"),
+    gismanager.WithRasterizeOutputType("Byte"),
+    gismanager.WithRasterizeBurnValues(1.0),
+    gismanager.WithRasterizeWhere("CONTINENT = 'Africa'"),
+    gismanager.WithRasterizeOutputBounds(-25, -40, 60, 40),
+    gismanager.WithRasterizeOutputSize(256, 256),
+)
+```
+
+### Burn an attribute into a continuous Float32 field
+
+```go
+err := gismanager.Rasterize(ctx, "countries.geojson", "pop.tif",
+    gismanager.WithRasterizeFormat("GTiff"),
+    gismanager.WithRasterizeOutputType("Float32"),
+    gismanager.WithRasterizeAttribute("POP_EST"),
+    gismanager.WithRasterizeOutputSize(360, 180),
+)
+```
+
+`WithRasterizeBurnValues` and `WithRasterizeAttribute` are mutually
+exclusive — use one or the other.
+
+## Multi-raster mosaic *(v1.3+)*
+
+### Combine many GeoTIFFs into a Virtual Raster
+
+```go
+err := gismanager.BuildVRT(ctx, "mosaic.vrt",
+    []string{"tile1.tif", "tile2.tif", "tile3.tif"},
+    gismanager.WithVRTResolution("highest"),
+    gismanager.WithVRTAddAlpha(),
+)
+```
+
+### Stack single-band inputs into RGBA
+
+```go
+err := gismanager.BuildVRT(ctx, "rgba.vrt",
+    []string{"red.tif", "green.tif", "blue.tif", "alpha.tif"},
+    gismanager.WithVRTSeparate(),
+)
+```
+
+`WithVRTSeparate` emits one output band per input dataset; without it,
+inputs are tiled into a single (multi-band) mosaic at the inputs'
+shared band count.
+
+## DEM analysis *(v1.3+)*
+
+### Hillshade
+
+```go
+err := gismanager.DEMProcessing(ctx, "dem.tif", "dem.hs.tif", "hillshade",
+    gismanager.WithDEMAzimuth(315),
+    gismanager.WithDEMAltitude(45),
+    gismanager.WithDEMMultidirectional(),
+)
+```
+
+### Slope
+
+```go
+err := gismanager.DEMProcessing(ctx, "dem.tif", "dem.slope.tif", "slope",
+    gismanager.WithDEMAlgorithm("ZevenbergenThorne"),
+)
+```
+
+### Color-relief (requires a color file)
+
+```go
+err := gismanager.DEMProcessing(ctx, "dem.tif", "dem.color.tif", "color-relief",
+    gismanager.WithDEMColorFile("./elevation_palette.txt"),
+)
+```
+
+Other supported modes: `aspect`, `TRI` (Terrain Ruggedness Index),
+`TPI` (Topographic Position Index), `roughness`. Color-file format
+documented at https://gdal.org/programs/gdaldem.html#color-relief.
+
 ## Cloud I/O via GDAL Virtual File Systems
 
-All four conversion entry points pass paths straight through to GDAL,
+All seven conversion entry points pass paths straight through to GDAL,
 so any of GDAL's virtual file system prefixes work transparently:
 
 | Prefix | Source | Notes |
@@ -163,18 +249,23 @@ if errors.Is(err, gismanager.ErrConvertFailed) {
 }
 ```
 
-`gerr.Op` is one of `"ConvertVector"`, `"ConvertRaster"`, or
-`"ReprojectRaster"` (`ToCOG` delegates to `ConvertRaster` so it surfaces
-as `"ConvertRaster"`).
+`gerr.Op` is one of `"ConvertVector"`, `"ConvertRaster"`,
+`"ReprojectRaster"`, `"Rasterize"`, `"BuildVRT"`, or `"DEMProcessing"`
+(`ToCOG` delegates to `ConvertRaster` so it surfaces as
+`"ConvertRaster"`).
 
 ## Known gaps
 
 - **Progress callbacks** — `lukeroth/gdal`'s utility wrappers don't
   thread `pfnProgress` through. Long conversions are opaque from the Go
-  side. Tracked for v1.3 (needs an upstream patch).
+  side. Tracked for v1.4+ (needs an upstream patch).
 - **Cancellation mid-conversion** — `ctx` is honored at the function
   boundary (before `OpenEx`), not inside the synchronous CGo call. A
   conversion that's already running cannot be aborted.
-- **Unknown driver silent-pass** — see the doc comment on
-  `ConvertVector` and `ConvertRaster`. Pre-validate driver names if you
-  need a hard guarantee.
+- **Other silent-failure modes** — driver-name pre-validation (v1.3)
+  closes the most common case, but invalid CRS strings, malformed
+  bounding boxes, etc. can still slip past `cerr=0`. Use the dev
+  container's CLIs to validate inputs ahead of time if needed.
+- **No GeoParquet** in the dev image (`ubuntu-small` excludes Apache
+  Arrow / Parquet). Swap to `ubuntu-full` if you need it; revisit in
+  v1.4+.

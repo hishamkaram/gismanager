@@ -37,7 +37,7 @@ The package wires the three together with a `*ManagerConfig` that holds the GeoS
 | `github.com/hishamkaram/gismanager/internal/zipx` | stdlib `archive/zip` extractor with zip-slip rejection + per-entry size cap. Used to auto-extract zipped shapefile bundles before the OGR open. Internal — not importable |
 | `github.com/hishamkaram/gismanager/cmd/gismanager` | Full publish-pipeline CLI |
 | `github.com/hishamkaram/gismanager/cmd/layerSchema` | Read-only schema-printing CLI |
-| `github.com/hishamkaram/gismanager/cmd/gisconvert` | v1.2+ conversion CLI (`ogr2ogr` / `gdal_translate` / `gdalwarp` / COG) |
+| `github.com/hishamkaram/gismanager/cmd/gisconvert` | v1.2+ conversion CLI (`ogr2ogr` / `gdal_translate` / `gdalwarp` / COG); v1.3 entry points (`Rasterize` / `BuildVRT` / `DEMProcessing`) are exposed via the library only |
 | `github.com/hishamkaram/gismanager/examples/convert_pipeline` | 30-line worked example of `ConvertVector` with reproject + clip + filter |
 
 A single Go module at the repo root. No `/v2` semantic-import-versioning suffix because gismanager has no released versions to preserve — v1.0.0 is the first stable tag.
@@ -73,26 +73,26 @@ func (m *ManagerConfig) PublishAll(ctx context.Context) error
 func (l *GdalLayer) Features(ctx context.Context) iter.Seq[gdal.Feature]
 ```
 
-### Conversion subsystem (v1.2+)
+### Conversion subsystem (v1.2+ / v1.3+)
 
-A second, **stateless** surface alongside the publish pipeline. No `*ManagerConfig` required — these are top-level package functions that wrap GDAL's three command-line workhorses:
+A second, **stateless** surface alongside the publish pipeline. No `*ManagerConfig` required — these are top-level package functions that wrap GDAL's command-line workhorses:
 
 ```go
-// Vector format conversion + reproject + filter + simplify (ogr2ogr equivalent).
-func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOption) error
+// v1.2 — format conversion family
+func ConvertVector(ctx, src, dst string, opts ...VectorConvertOption) error          // ogr2ogr
+func ConvertRaster(ctx, src, dst string, opts ...RasterConvertOption) error          // gdal_translate
+func ToCOG(ctx, src, dst string, opts ...RasterConvertOption) error                  // gdal_translate -of COG
+func ReprojectRaster(ctx, src, dst, srcSRS, dstSRS string, opts ...RasterConvertOption) error  // gdalwarp
 
-// Raster format conversion (gdal_translate equivalent).
-func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOption) error
-
-// Cloud-Optimized GeoTIFF — thin convenience over ConvertRaster with sane defaults.
-func ToCOG(ctx context.Context, src, dst string, opts ...RasterConvertOption) error
-
-// Raster reprojection (gdalwarp equivalent), with optional cookie-cutter clipping
-// via WithRasterCutline.
-func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts ...RasterConvertOption) error
+// v1.3 — analysis / mosaic / vector→raster
+func Rasterize(ctx, vectorSrc, rasterDst string, opts ...RasterizeOption) error      // gdal_rasterize
+func BuildVRT(ctx, dst string, srcs []string, opts ...VRTOption) error               // gdalbuildvrt
+func DEMProcessing(ctx, src, dst, mode string, opts ...DEMOption) error              // gdaldem
 ```
 
-Options use a modality prefix (`WithVector*` / `WithRaster*`) to avoid name collisions in the same package. Each helper renders to a single `ogr2ogr` / `gdal_translate` / `gdalwarp` CLI flag — the `buildVectorTranslateArgs` / `buildTranslateArgs` / `buildWarpArgs` renderers are unit-tested separately so the mapping is locked in without needing CGo. Errors are wrapped with `ErrConvertFailed`; the `GISError.Op` field disambiguates the entry point.
+Options use a modality prefix (`WithVector*` / `WithRaster*` / `WithRasterize*` / `WithVRT*` / `WithDEM*`) to avoid name collisions in the same package. Each helper renders to a single CLI flag — the `build<Op>Args` renderers are unit-tested separately so the mapping is locked in without needing CGo. Errors are wrapped with `ErrConvertFailed`; the `GISError.Op` field disambiguates the entry point.
+
+Driver names supplied via the `With<Op>Format` helpers are pre-validated against the running GDAL build (`gdal.GetDriverByName`) before the C call — an unknown driver surfaces as a clean `ErrConvertFailed` envelope rather than the upstream silent fail-with-stderr-warning behavior. Added in v1.3.
 
 All conversion entry points pass paths transparently to GDAL, so any `/vsi*/` prefix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`) works without special handling. Full reference: [`conversions.md`](conversions.md).
 

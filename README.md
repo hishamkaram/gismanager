@@ -135,16 +135,19 @@ Same idea programmatically (the integration suite is a worked example — see [`
 
 ## Conversion
 
-Beyond the publish pipeline, gismanager (since v1.2) ships a stateless conversion subsystem that mirrors GDAL's three command-line workhorses:
+Beyond the publish pipeline, gismanager ships a stateless conversion subsystem that mirrors GDAL's command-line workhorses:
 
-| Function | Wraps | Use case |
-|---|---|---|
-| `ConvertVector` | `ogr2ogr` | format conversion + reproject + bbox clip + attribute filter + simplify |
-| `ConvertRaster` | `gdal_translate` | format conversion + band subset + output window |
-| `ToCOG` | `gdal_translate -of COG` | Cloud-Optimized GeoTIFF (sane defaults pre-applied) |
-| `ReprojectRaster` | `gdalwarp` | raster reprojection + cookie-cutter clip via cutline |
+| Function | Wraps | Use case | Since |
+|---|---|---|---|
+| `ConvertVector` | `ogr2ogr` | vector format conversion + reproject + bbox clip + attribute filter + simplify | v1.2 |
+| `ConvertRaster` | `gdal_translate` | raster format conversion + band subset + output window | v1.2 |
+| `ToCOG` | `gdal_translate -of COG` | Cloud-Optimized GeoTIFF with sane defaults pre-applied | v1.2 |
+| `ReprojectRaster` | `gdalwarp` | raster reprojection + cookie-cutter clip via cutline | v1.2 |
+| `Rasterize` | `gdal_rasterize` | vector → raster: burn polygons into a mask, or attributes into a continuous field | v1.3 |
+| `BuildVRT` | `gdalbuildvrt` | mosaic many GeoTIFFs into a Virtual Raster (tile pyramid prep, RGBA stacking) | v1.3 |
+| `DEMProcessing` | `gdaldem` | DEM analysis: hillshade, slope, aspect, color-relief, TRI, TPI, roughness | v1.3 |
 
-All four are top-level package functions — no `*ManagerConfig` required — and accept `/vsi*/`-prefixed paths transparently (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`).
+All seven are top-level package functions — no `*ManagerConfig` required — and accept `/vsi*/`-prefixed paths transparently (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). Driver names supplied via the `With*Format` helpers are pre-validated against the running GDAL build (since v1.3) — an unknown driver surfaces as a clean `ErrConvertFailed` instead of GDAL's silent fail-with-stderr-warning behavior.
 
 ```go
 // Vector: 4326 GeoJSON → 3857 GeoPackage, clipped to Africa, simplified.
@@ -289,6 +292,26 @@ err = gismanager.ToCOG(ctx, "scene.tif", "scene.cog.tif")
 err = gismanager.ReprojectRaster(ctx, "utm.tif", "wm.tif",
     "EPSG:32618", "EPSG:3857",
     gismanager.WithRasterResamplingAlg("bilinear"),
+)
+
+// v1.3+: vector → raster (burn an attribute into a continuous Float32 field).
+err = gismanager.Rasterize(ctx, "countries.geojson", "pop.tif",
+    gismanager.WithRasterizeFormat("GTiff"),
+    gismanager.WithRasterizeOutputType("Float32"),
+    gismanager.WithRasterizeAttribute("POP_EST"),
+    gismanager.WithRasterizeOutputSize(360, 180),
+)
+
+// v1.3+: stack many GeoTIFFs into a single VRT for downstream Warp/Translate.
+err = gismanager.BuildVRT(ctx, "mosaic.vrt",
+    []string{"tile1.tif", "tile2.tif", "tile3.tif"},
+    gismanager.WithVRTResolution("highest"),
+)
+
+// v1.3+: hillshade from a DEM.
+err = gismanager.DEMProcessing(ctx, "dem.tif", "dem.hs.tif", "hillshade",
+    gismanager.WithDEMAzimuth(315),
+    gismanager.WithDEMAltitude(45),
 )
 ```
 
