@@ -1,0 +1,32 @@
+# gismanager testdata manifest.
+#
+# Format: <sha256>  <relpath-under-testdata/fetched/>  <url>
+# - sha256: lowercase hex
+# - relpath: posix path; subdirs allowed (script will mkdir -p)
+# - url: must point at an immutable ref (tagged release, signed CDN path)
+#
+# Run `make fetch-testdata` to download/refresh. The fetched/ directory is
+# gitignored — only the manifest and license metadata are tracked.
+#
+# When adding a new fixture: download it, run `sha256sum <file>`, and append
+# a row here. License/source notes go in LICENSES.md.
+
+# --- Vector ---------------------------------------------------------------
+
+# Natural Earth 1:110m admin-0 countries (Shapefile bundle, EPSG:4326).
+# Used by ConvertVector tests as the canonical Shapefile→GeoPackage fixture.
+0f243aeac8ac6cf26f0417285b0bd33ac47f1b5bdb719fd3e0df37d03ea37110  ne_110m_admin_0_countries.zip  https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip
+
+# Natural Earth 1:110m admin-0 countries (GeoJSON, EPSG:4326).
+# Used by ConvertVector reproject + bbox-clip + WHERE-filter tests.
+6866c877d39cba9c357620878839b336d569f8c662d3cfab4cb1dbe2d39c977f  ne_110m_admin_0_countries.geojson  https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_110m_admin_0_countries.geojson
+
+# --- Raster ---------------------------------------------------------------
+
+# rasterio canonical RGB GeoTIFF (EPSG:32618, ~1.7 MB, 3 bands, 718x791).
+# Used by ConvertRaster (→ COG, → PNG) and ReprojectRaster (32618 → 3857).
+d7cbe932c7ed74a627706a9e9df99f706df3e5abc7d45a49e9d00677a6b09eb4  RGB.byte.tif  https://github.com/rasterio/rasterio/raw/1.4.3/tests/data/RGB.byte.tif
+
+# rio-tiler reference COG fixture (EPSG:32618, ~800 KB).
+# Used to verify our ConvertRaster output against a known-good COG.
+ff2a3156acdb8af76218053c41441dd20563d9a0f6b2e359a2e05c52ee10251c  cog.tif  https://github.com/cogeotiff/rio-tiler/raw/7.0.1/tests/fixtures/cog.tif

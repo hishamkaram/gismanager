@@ -48,6 +48,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Cache the manifest-driven testdata fixtures across runs. The cache
+      # key is bound to the manifest hash, so any manifest change (new
+      # fixture, updated sha) invalidates the cache and triggers a fresh
+      # download; otherwise the cache hit is zero-network.
+      #
+      # Important: fetched fixtures live in `testdata-fetched/` (sibling of
+      # `testdata/`), NOT inside `testdata/`. The legacy unit and
+      # integration tests walk `./testdata/` recursively and would
+      # otherwise pick up the fetched fixtures and break.
+      - name: Cache fetched testdata
+        uses: actions/cache@v4
+        with:
+          path: testdata-fetched
+          key: testdata-${{ hashFiles('testdata/manifest.sha256') }}
+          restore-keys: |
+            testdata-
+
+      - name: Fetch testdata fixtures
+        run: bash scripts/fetch-testdata.sh
+
       # buildx + GHA cache: layer-cache the dev and GeoServer image builds
       # across workflow runs. Without this, every PR rebuilds the dev
       # image from scratch (including the apt-install layer), and any

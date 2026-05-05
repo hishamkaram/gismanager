@@ -29,7 +29,7 @@ ARGS ?=
 GEOSERVER_VERSION ?= 2.28.0
 
 .PHONY: help dev shell build test test-unit test-integration lint lint-fix \
-        vuln tidy fmt vet image clean \
+        vuln tidy fmt vet image clean fetch-testdata \
         compose-up compose-down compose-test-up compose-test-down compose-test-logs
 
 help: ## show this help
@@ -52,8 +52,11 @@ test: test-unit ## alias for test-unit
 test-unit: ## go test -race ./... (no integration tag)
 	$(RUN) go test -race -count=1 $(ARGS) ./...
 
-test-integration: ## go test -tags=integration ./... inside the test-runner container against the compose-test stack (requires compose-test-up first)
+test-integration: fetch-testdata ## go test -tags=integration ./... inside the test-runner container against the compose-test stack (requires compose-test-up first)
 	$(COMPOSE_TEST) run --rm -T test-runner go test -race -tags=integration -timeout=15m -count=1 $(ARGS) ./...
+
+fetch-testdata: ## download/refresh testdata fixtures listed in testdata/manifest.sha256 (idempotent; runs on host since curl + sha256sum are stdlib)
+	@bash scripts/fetch-testdata.sh
 
 vet: ## go vet ./...
 	$(RUN) go vet $(ARGS) ./...
