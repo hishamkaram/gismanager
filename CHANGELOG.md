@@ -6,6 +6,10 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ### Added
 
+- **`docs/conversions.md`** — full reference for the v1.2 conversion subsystem with vector + raster + reprojection examples and the cloud-I/O VFS matrix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). Linked from the README. (PR 5 of v1.2)
+- **README "Conversion" section** — top-level overview pointing at `docs/conversions.md`. (PR 5 of v1.2)
+- **`/vsimem/` destination unit test** for `ConvertVector` — proves the cloud-aware I/O works in-process without network or filesystem write. (PR 5 of v1.2)
+
 - **`ReprojectRaster(ctx, src, dst, srcSRS, dstSRS, opts...) error`** — raster reprojection (the `gdalwarp` equivalent). Pairs with the EPSG:4326↔EPSG:3857 web-tile workflow but accepts any GDAL-friendly CRS. Reuses the `RasterConvertOption` type — chain with `WithRasterResamplingAlg`, `WithRasterTargetResolution`, `WithRasterCutline` for the typical "warp + clip" pipeline. Cutline support emits `-cutline` + `-cl` + `-crop_to_cutline`. (PR 4 of v1.2)
 - **`ConvertRaster(ctx, src, dst, opts...) error`** — generic raster format conversion (GeoTIFF → COG, GeoTIFF → PNG, band-subset, output-window). Thin wrapper around the C entry point behind `gdal_translate` (`gdal.Translate`). (PR 3 of v1.2)
 - **`ToCOG(ctx, src, dst, opts...) error`** — convenience wrapper that pre-fills `WithRasterFormat("COG")` plus sane defaults (`COMPRESS=DEFLATE`, `BLOCKSIZE=512`, `OVERVIEW_RESAMPLING=NEAREST`). Caller-supplied options override defaults — pass `WithRasterCreationOption("COMPRESS", "ZSTD")` to swap codecs. (PR 3 of v1.2)
