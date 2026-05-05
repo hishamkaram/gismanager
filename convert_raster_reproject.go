@@ -28,9 +28,10 @@ import (
 // Errors are wrapped with [ErrConvertFailed]; recover via
 // [errors.As] into [*GISError]. The Op field is "ReprojectRaster".
 //
-// Known gap: same as [ConvertVector] — silent failures when GDAL's C
-// option-parsing rejects an input (e.g. an unknown CRS string) without
-// setting cerr. Pre-validate inputs on the caller side if needed.
+// Driver names supplied via [WithRasterFormat] are pre-validated; an
+// unknown driver surfaces as a clean ErrConvertFailed before the C
+// call. Other silent-failure modes (invalid CRS strings, malformed
+// option values) still rely on GDAL surfacing a non-zero cerr.
 func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts ...RasterConvertOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -42,6 +43,11 @@ func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts 
 	}
 
 	cfg := newRasterConvertConfig(opts)
+
+	if err := validateGDALDriver(cfg.format); err != nil {
+		cfg.logger.Error("ReprojectRaster: invalid format", "format", cfg.format, "err", err)
+		return newGISError("ReprojectRaster", src, ErrConvertFailed, err)
+	}
 
 	srcDS, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {

@@ -170,6 +170,11 @@ func Rasterize(ctx context.Context, vectorSrc, rasterDst string, opts ...Rasteri
 	}
 	cfg := newRasterizeConfig(opts)
 
+	if err := validateGDALDriver(cfg.format); err != nil {
+		cfg.logger.Error("Rasterize: invalid format", "format", cfg.format, "err", err)
+		return newGISError("Rasterize", vectorSrc, ErrConvertFailed, err)
+	}
+
 	srcDS, err := gdal.OpenEx(vectorSrc, gdal.OFVector|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("Rasterize: open source", "src", vectorSrc, "err", err)
