@@ -4,6 +4,10 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+### Added
+
+- **`Rasterize(ctx, vectorSrc, rasterDst, opts...) error`** — vector → raster (the `gdal_rasterize` equivalent). Burn constant values via `WithRasterizeBurnValues` or per-feature attribute values via `WithRasterizeAttribute`; control output via `WithRasterizeFormat` / `WithRasterizeOutputType` / `WithRasterizeTargetResolution` / `WithRasterizeOutputSize` / `WithRasterizeOutputBounds` / `WithRasterizeLayer` / `WithRasterizeWhere` / `WithRasterizeCreationOption` / `WithRasterizeRawOptions`. Errors wrap `ErrConvertFailed` with `Op="Rasterize"`. (PR 1 of v1.3)
+
 ## [1.2.0] — 2026-05-05
 
 ### Context
