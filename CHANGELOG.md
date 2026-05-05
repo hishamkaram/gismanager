@@ -6,6 +6,7 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ### Added
 
+- **`ReprojectRaster(ctx, src, dst, srcSRS, dstSRS, opts...) error`** — raster reprojection (the `gdalwarp` equivalent). Pairs with the EPSG:4326↔EPSG:3857 web-tile workflow but accepts any GDAL-friendly CRS. Reuses the `RasterConvertOption` type — chain with `WithRasterResamplingAlg`, `WithRasterTargetResolution`, `WithRasterCutline` for the typical "warp + clip" pipeline. Cutline support emits `-cutline` + `-cl` + `-crop_to_cutline`. (PR 4 of v1.2)
 - **`ConvertRaster(ctx, src, dst, opts...) error`** — generic raster format conversion (GeoTIFF → COG, GeoTIFF → PNG, band-subset, output-window). Thin wrapper around the C entry point behind `gdal_translate` (`gdal.Translate`). (PR 3 of v1.2)
 - **`ToCOG(ctx, src, dst, opts...) error`** — convenience wrapper that pre-fills `WithRasterFormat("COG")` plus sane defaults (`COMPRESS=DEFLATE`, `BLOCKSIZE=512`, `OVERVIEW_RESAMPLING=NEAREST`). Caller-supplied options override defaults — pass `WithRasterCreationOption("COMPRESS", "ZSTD")` to swap codecs. (PR 3 of v1.2)
 - **`WithRaster*` option helpers**: `WithRasterLogger`, `WithRasterFormat`, `WithRasterCreationOption`, `WithRasterOutputBounds`, `WithRasterBands`, `WithRasterResamplingAlg`, `WithRasterTargetResolution`, `WithRasterCutline`, `WithRasterRawOptions`. Each maps 1:1 to a `gdal_translate` / `gdalwarp` CLI flag. The cutline option is wired only on the warp-side (PR 4); `gdal_translate` does not support cutlines. (PR 3 of v1.2)
