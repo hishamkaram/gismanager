@@ -159,17 +159,20 @@ func WithVectorRawOptions(args ...string) VectorConvertOption {
 // Errors are wrapped with [ErrConvertFailed]; recover the underlying
 // GDAL error via [errors.As] into [*GISError].
 //
-// Known gap: lukeroth/gdal's VectorTranslate wrapper only surfaces a Go
-// error when the C-level cerr is nonzero. Some failure modes — notably
-// an unknown destination driver passed via [WithVectorFormat] — fail at
-// option-parsing time inside GDAL, log to stderr, and return a NULL
-// dataset with cerr=0; ConvertVector then returns nil. Pre-validate
-// driver names on the caller side if you need a hard guarantee.
+// Driver names supplied via [WithVectorFormat] are validated against
+// the running GDAL build before the C call, so an unknown driver
+// surfaces as a clean ErrConvertFailed rather than the upstream
+// silent-fail-with-stderr-warning behavior.
 func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	cfg := newVectorConvertConfig(opts)
+
+	if err := validateGDALDriver(cfg.format); err != nil {
+		cfg.logger.Error("ConvertVector: invalid format", "format", cfg.format, "err", err)
+		return newGISError("ConvertVector", src, ErrConvertFailed, err)
+	}
 
 	srcDS, err := gdal.OpenEx(src, gdal.OFVector|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {

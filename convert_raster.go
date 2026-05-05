@@ -144,6 +144,11 @@ func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOp
 	}
 	cfg := newRasterConvertConfig(opts)
 
+	if err := validateGDALDriver(cfg.format); err != nil {
+		cfg.logger.Error("ConvertRaster: invalid format", "format", cfg.format, "err", err)
+		return newGISError("ConvertRaster", src, ErrConvertFailed, err)
+	}
+
 	srcDS, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("ConvertRaster: open source", "src", src, "err", err)

@@ -177,6 +177,11 @@ func DEMProcessing(ctx context.Context, src, dst, mode string, opts ...DEMOption
 			fmt.Errorf("mode=color-relief requires WithDEMColorFile"))
 	}
 
+	if err := validateGDALDriver(cfg.format); err != nil {
+		cfg.logger.Error("DEMProcessing: invalid format", "format", cfg.format, "err", err)
+		return newGISError("DEMProcessing", src, ErrConvertFailed, err)
+	}
+
 	srcDS, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("DEMProcessing: open source", "src", src, "err", err)
