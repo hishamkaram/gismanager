@@ -41,6 +41,13 @@ var (
 	// ErrNoSourcesFound signals that the configured source directory
 	// contained no supported GIS files.
 	ErrNoSourcesFound = errors.New("gismanager: no sources found")
+
+	// ErrConvertFailed signals that a vector or raster conversion
+	// (ConvertVector / ConvertRaster / ToCOG / ReprojectRaster) failed.
+	// The underlying GDAL error is recoverable via [errors.As] into
+	// [*GISError]; the GISError.Op field disambiguates which entry
+	// point produced the error.
+	ErrConvertFailed = errors.New("gismanager: convert failed")
 )
 
 // GISError is the typed error gismanager returns for higher-level
