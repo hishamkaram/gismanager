@@ -6,6 +6,9 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ### Added
 
+- **`ConvertVector(ctx, src, dst, opts...) error`** — vector format conversion (GeoJSON ↔ GeoPackage ↔ Shapefile ↔ FlatGeobuf ↔ KML) plus reprojection, bbox clip, attribute filter, simplification, field-select, and layer rename. Thin wrapper around the C entry point behind `ogr2ogr` (`gdal.VectorTranslate`). Stateless — does NOT require a `*ManagerConfig`. (PR 2 of v1.2)
+- **`WithVector*` option helpers**: `WithVectorLogger`, `WithVectorFormat`, `WithVectorSourceSRS`, `WithVectorTargetSRS`, `WithVectorBoundingBox`, `WithVectorWhere`, `WithVectorSimplify`, `WithVectorSelectFields`, `WithVectorLayerName`, `WithVectorOverwrite`, `WithVectorRawOptions`. Each maps 1:1 to a `ogr2ogr` CLI flag. (PR 2 of v1.2)
+- **`ErrConvertFailed`** sentinel for the conversion subsystem. Wrap-recoverable via `errors.As` into `*GISError`; `GISError.Op` disambiguates the conversion entry point. (PR 2 of v1.2)
 - **Manifest-driven `make fetch-testdata`.** Real-world geo fixtures (Natural Earth countries, rasterio `RGB.byte.tif`, rio-tiler `cog.tif`, plus more in subsequent PRs) are downloaded into the gitignored sibling `testdata-fetched/` directory on demand, with sha256 verification on each fetch. CI caches the fetched payload keyed on the manifest hash, so cold-runs pay ~3 s of network and warm-runs are zero-network. Tracked: `testdata/manifest.sha256`, `testdata/LICENSES.md`, `testdata/README.md`, `scripts/fetch-testdata.sh`, `testdata-fetched/.gitignore`. Untracked: the binaries themselves. The fetched fixtures live in a sibling directory (not under `testdata/`) so the existing `TestGetGISFiles` unit test and `TestPublishAll_EndToEnd` integration test — both of which walk `./testdata/` — are unaffected. (PR 1 of v1.2)
 
 ## [1.1.0] — 2026-05-04
