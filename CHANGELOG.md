@@ -6,6 +6,8 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ### Added
 
+- **`cmd/gisconvert`** — CLI counterpart to the v1.2 conversion library. Vector mode covers Shapefile/GeoJSON/GPKG/KML/FlatGeobuf format conversion plus reprojection, bbox clip, attribute filter, simplification, field-select, and layer rename. Raster mode covers GeoTIFF/COG/PNG/JPEG conversion, band subsetting, output windows, target resolution, COG shortcut (`-cog`), and reprojection (`-s-srs` + `-t-srs`) with cookie-cutter clipping (`-cutline`). Stdlib `flag` only — no new runtime deps. (PR 6 of v1.2)
+
 - **`docs/conversions.md`** — full reference for the v1.2 conversion subsystem with vector + raster + reprojection examples and the cloud-I/O VFS matrix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). Linked from the README. (PR 5 of v1.2)
 - **README "Conversion" section** — top-level overview pointing at `docs/conversions.md`. (PR 5 of v1.2)
 - **`/vsimem/` destination unit test** for `ConvertVector` — proves the cloud-aware I/O works in-process without network or filesystem write. (PR 5 of v1.2)
