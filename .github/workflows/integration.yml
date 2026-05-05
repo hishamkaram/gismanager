@@ -46,7 +46,7 @@ jobs:
     env:
       GEOSERVER_VERSION: ${{ matrix.geoserver }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Cache the manifest-driven testdata fixtures across runs. The cache
       # key is bound to the manifest hash, so any manifest change (new
@@ -58,7 +58,7 @@ jobs:
       # integration tests walk `./testdata/` recursively and would
       # otherwise pick up the fetched fixtures and break.
       - name: Cache fetched testdata
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: testdata-fetched
           key: testdata-${{ hashFiles('testdata/manifest.sha256') }}
@@ -74,10 +74,10 @@ jobs:
       # transient Ubuntu-mirror outage fails the whole job. With cache,
       # apt only re-runs on Dockerfile changes — far less surface for
       # mirror flakes.
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build dev image (with GHA cache)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -88,7 +88,7 @@ jobs:
           cache-to: type=gha,scope=dev-image,mode=max
 
       - name: Build GeoServer test image (with GHA cache)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
