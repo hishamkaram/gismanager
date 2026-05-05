@@ -25,11 +25,14 @@ It exists because the path from "I have a shapefile" to "I have a published GeoS
 
 ## What this tool does
 
-Two CLI binaries plus a small Go library:
+Three CLI binaries plus a Go library covering two GIS workflows:
 
-- **`gismanager`** — full pipeline. Walks `source.path`, picks every supported GIS file, copies its layers into PostGIS via OGR's PostgreSQL driver, then publishes each PostGIS table as a GeoServer feature type. Idempotent: workspace, datastore, and feature-type creation all check existence first via the `geoserver/v2` client's `Get` + `errors.Is(err, geoserver.ErrNotFound)` idiom.
+- **`gismanager`** — full publish pipeline. Walks `source.path`, picks every supported GIS file, copies its layers into PostGIS via OGR's PostgreSQL driver, then publishes each PostGIS table as a GeoServer feature type. Idempotent: workspace, datastore, and feature-type creation all check existence first via the `geoserver/v2` client's `Get` + `errors.Is(err, geoserver.ErrNotFound)` idiom.
 - **`layerSchema`** — read-only schema inspector. Walks `source.path`, opens each GIS file via GDAL, and prints the geometry column + attribute fields for every layer it finds. No PostGIS, no GeoServer.
-- **`package gismanager`** — the same flow as a Go library. Construct a `*ManagerConfig` (today via `gismanager.FromConfig(yamlPath)`; functional-options constructor planned), then call `OpenSource` / `LayerToPostgis` / `PublishGeoserverLayer` directly.
+- **`gisconvert`** *(v1.2+)* — data-conversion CLI: vector format conversion (`ogr2ogr` equivalent), raster format conversion (`gdal_translate` equivalent), Cloud-Optimized GeoTIFF generation, and raster reprojection (`gdalwarp` equivalent). See [Conversion](#conversion).
+- **`package gismanager`** — both flows as a Go library:
+  - **Publish**: construct a `*ManagerConfig` via `gismanager.New(opts ...Option)` (functional-options) or the YAML-driven `gismanager.FromConfig(yamlPath)`, then call `Walk` / `PublishAll` or the lower-level `OpenSource` / `LayerToPostgis` / `PublishGeoserverLayer` primitives.
+  - **Convert** *(v1.2+)*: stateless `ConvertVector` / `ConvertRaster` / `ToCOG` / `ReprojectRaster` package functions. No `*ManagerConfig` required.
 
 ### Supported source formats
 
@@ -205,6 +208,8 @@ A working config used by the integration suite lives at [`testdata/test_config.y
 
 ## Library use
 
+### Publish pipeline
+
 ```go
 import (
     "context"
@@ -248,6 +253,33 @@ func main() {
 ```
 
 > **Resource lifecycle:** `*gdal.DataSource` returned by `OpenSource` owns a CGo-side handle that must be released via `.Destroy()` to avoid leaks. `Walk` and `PublishAll` do this automatically (`defer source.Destroy()` per file). Direct callers of `OpenSource` are responsible for calling `Destroy()` themselves — the binding has no `Close()` method; `Destroy()` is the canonical release primitive in `lukeroth/gdal`.
+
+### Conversion *(v1.2+)*
+
+The conversion entry points are top-level package functions — no `*ManagerConfig` required, no GeoServer/PostGIS state held.
+
+```go
+// Reproject + clip + filter + simplify in one call.
+err := gismanager.ConvertVector(ctx, "world.geojson", "africa.gpkg",
+    gismanager.WithVectorFormat("GPKG"),
+    gismanager.WithVectorOverwrite(),
+    gismanager.WithVectorTargetSRS("EPSG:3857"),
+    gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
+    gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
+    gismanager.WithVectorSimplify(100),
+)
+
+// Cloud-Optimized GeoTIFF with sane defaults.
+err = gismanager.ToCOG(ctx, "scene.tif", "scene.cog.tif")
+
+// UTM → Web Mercator with bilinear resampling.
+err = gismanager.ReprojectRaster(ctx, "utm.tif", "wm.tif",
+    "EPSG:32618", "EPSG:3857",
+    gismanager.WithRasterResamplingAlg("bilinear"),
+)
+```
+
+A complete 30-line program lives in [`examples/convert_pipeline/main.go`](examples/convert_pipeline/main.go); full reference and the cloud-I/O VFS matrix in [`docs/conversions.md`](docs/conversions.md).
 
 ## Version compatibility
 

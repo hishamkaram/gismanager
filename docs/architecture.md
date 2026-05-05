@@ -35,14 +35,16 @@ The package wires the three together with a `*ManagerConfig` that holds the GeoS
 |---|---|
 | `github.com/hishamkaram/gismanager` | Public API — `*ManagerConfig`, `*GdalLayer`, `*GISError`, sentinels, public method receivers |
 | `github.com/hishamkaram/gismanager/internal/zipx` | stdlib `archive/zip` extractor with zip-slip rejection + per-entry size cap. Used to auto-extract zipped shapefile bundles before the OGR open. Internal — not importable |
-| `github.com/hishamkaram/gismanager/cmd/gismanager` | Full-pipeline CLI |
+| `github.com/hishamkaram/gismanager/cmd/gismanager` | Full publish-pipeline CLI |
 | `github.com/hishamkaram/gismanager/cmd/layerSchema` | Read-only schema-printing CLI |
+| `github.com/hishamkaram/gismanager/cmd/gisconvert` | v1.2+ conversion CLI (`ogr2ogr` / `gdal_translate` / `gdalwarp` / COG) |
+| `github.com/hishamkaram/gismanager/examples/convert_pipeline` | 30-line worked example of `ConvertVector` with reproject + clip + filter |
 
 A single Go module at the repo root. No `/v2` semantic-import-versioning suffix because gismanager has no released versions to preserve — v1.0.0 is the first stable tag.
 
 ## Public API
 
-The lead type is `*ManagerConfig` (currently constructed from YAML via `gismanager.FromConfig(path)`; functional-options constructor planned). Methods:
+The lead type is `*ManagerConfig`, constructed via `gismanager.New(opts ...Option)` (functional options — `WithLogger`, `WithGeoserver`, `WithDatastore`, `WithSource`) or the YAML-driven `gismanager.FromConfig(path)`. Methods:
 
 ```go
 // Build a v2 GeoServer client from the configured endpoint + credentials.
@@ -70,6 +72,29 @@ func (m *ManagerConfig) PublishAll(ctx context.Context) error
 // advances; replaces the deprecated GetFeatures() []*gdal.Feature shape.
 func (l *GdalLayer) Features(ctx context.Context) iter.Seq[gdal.Feature]
 ```
+
+### Conversion subsystem (v1.2+)
+
+A second, **stateless** surface alongside the publish pipeline. No `*ManagerConfig` required — these are top-level package functions that wrap GDAL's three command-line workhorses:
+
+```go
+// Vector format conversion + reproject + filter + simplify (ogr2ogr equivalent).
+func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOption) error
+
+// Raster format conversion (gdal_translate equivalent).
+func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOption) error
+
+// Cloud-Optimized GeoTIFF — thin convenience over ConvertRaster with sane defaults.
+func ToCOG(ctx context.Context, src, dst string, opts ...RasterConvertOption) error
+
+// Raster reprojection (gdalwarp equivalent), with optional cookie-cutter clipping
+// via WithRasterCutline.
+func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts ...RasterConvertOption) error
+```
+
+Options use a modality prefix (`WithVector*` / `WithRaster*`) to avoid name collisions in the same package. Each helper renders to a single `ogr2ogr` / `gdal_translate` / `gdalwarp` CLI flag — the `buildVectorTranslateArgs` / `buildTranslateArgs` / `buildWarpArgs` renderers are unit-tested separately so the mapping is locked in without needing CGo. Errors are wrapped with `ErrConvertFailed`; the `GISError.Op` field disambiguates the entry point.
+
+All conversion entry points pass paths transparently to GDAL, so any `/vsi*/` prefix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`) works without special handling. Full reference: [`conversions.md`](conversions.md).
 
 All methods that can fail return errors wrapping a sentinel from [`../errors.go`](../errors.go) — see the README's [Errors](../README.md#errors) section for the matching idiom.
 

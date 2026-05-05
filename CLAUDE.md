@@ -82,7 +82,7 @@ gismanager is **context-first**: every exported method on `*Manager` takes `ctx 
 - **Never commit directly to `master`.** Always create a feature branch, push it, open a PR, wait for CI to go green, then squash-merge.
 - **Never add Claude (or any AI assistant) as a git co-author.** Do not append `Co-Authored-By: Claude ...` trailers. Commit messages are authored by the user only.
 - **Never commit planning markdowns** — design docs, revival plans, research notes belong in `~/.claude/plans/`, not in this repo.
-- **No panics in library code.** gismanager library code (root + `internal/`) must contain zero `panic(` calls. The two CLIs (`cmd/gismanager`, `cmd/layerSchema`) may panic at the entry point only when a config error is fatal.
+- **No panics in library code.** gismanager library code (root + `internal/`) must contain zero `panic(` calls. The three CLIs (`cmd/gismanager`, `cmd/layerSchema`, `cmd/gisconvert`) may panic at the entry point only when a config error is fatal.
 - **No new runtime dependencies** without prior discussion. The dependency surface is intentionally small: `lukeroth/gdal`, `lib/pq`, `hishamkaram/geoserver/v2`, `gopkg.in/yaml.v3`, stdlib.
 - **No `mholt/archiver`** — deprecated upstream; use `internal/zipx` (stdlib `archive/zip`).
 - **Don't auto-tag releases** and don't merge a PR with red or pending CI — both are explicit user actions.
