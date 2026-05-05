@@ -4,6 +4,10 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+### Added
+
+- **Manifest-driven `make fetch-testdata`.** Real-world geo fixtures (Natural Earth countries, rasterio `RGB.byte.tif`, rio-tiler `cog.tif`, plus more in subsequent PRs) are downloaded into the gitignored `testdata/fetched/` directory on demand, with sha256 verification on each fetch. CI caches the fetched payload keyed on the manifest hash, so cold-runs pay ~3 s of network and warm-runs are zero-network. Tracked: `testdata/manifest.sha256`, `testdata/LICENSES.md`, `testdata/README.md`, `scripts/fetch-testdata.sh`. Untracked: the binaries themselves. (PR 1 of v1.2)
+
 ## [1.1.0] — 2026-05-04
 
 ### Context
