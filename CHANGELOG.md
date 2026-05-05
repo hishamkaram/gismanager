@@ -4,22 +4,52 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-05-05
+
+### Context
+
+GDAL data-conversion subsystem on top of v1.1.0. Six focused PRs (#17, #19, #20, #21, #22, #23) sequenced by dependency. All changes are additive — no breaking changes, no deprecations. The conversion surface is **stateless**: top-level package functions, no `*ManagerConfig` required, mirroring the design choice that conversion is independent of GeoServer/PostGIS state.
+
 ### Added
 
-- **`cmd/gisconvert`** — CLI counterpart to the v1.2 conversion library. Vector mode covers Shapefile/GeoJSON/GPKG/KML/FlatGeobuf format conversion plus reprojection, bbox clip, attribute filter, simplification, field-select, and layer rename. Raster mode covers GeoTIFF/COG/PNG/JPEG conversion, band subsetting, output windows, target resolution, COG shortcut (`-cog`), and reprojection (`-s-srs` + `-t-srs`) with cookie-cutter clipping (`-cutline`). Stdlib `flag` only — no new runtime deps. (PR 6 of v1.2)
+- **`ConvertVector(ctx, src, dst, opts...) error`** — vector format conversion (GeoJSON ↔ GeoPackage ↔ Shapefile ↔ FlatGeobuf ↔ KML) plus reprojection, bbox clip, attribute filter, simplification, field-select, and layer rename. Thin wrapper around the C entry point behind `ogr2ogr` (`gdal.VectorTranslate`). (PR #19)
+- **`ConvertRaster(ctx, src, dst, opts...) error`** — generic raster format conversion (GeoTIFF → COG, GeoTIFF → PNG, band-subset, output-window). Thin wrapper around the C entry point behind `gdal_translate` (`gdal.Translate`). (PR #20)
+- **`ToCOG(ctx, src, dst, opts...) error`** — Cloud-Optimized GeoTIFF convenience wrapper. Pre-fills `WithRasterFormat("COG")` plus sane defaults (`COMPRESS=DEFLATE`, `BLOCKSIZE=512`, `OVERVIEW_RESAMPLING=NEAREST`); caller-supplied options override the defaults. (PR #20)
+- **`ReprojectRaster(ctx, src, dst, srcSRS, dstSRS, opts...) error`** — raster reprojection (the `gdalwarp` equivalent). Cookie-cutter clipping via `WithRasterCutline` emits `-cutline` + `-cl` + `-crop_to_cutline`. (PR #21)
+- **`WithVector*` option helpers** (11 helpers): `WithVectorLogger`, `WithVectorFormat`, `WithVectorSourceSRS`, `WithVectorTargetSRS`, `WithVectorBoundingBox`, `WithVectorWhere`, `WithVectorSimplify`, `WithVectorSelectFields`, `WithVectorLayerName`, `WithVectorOverwrite`, `WithVectorRawOptions`. Each maps 1:1 to an `ogr2ogr` CLI flag. (PR #19)
+- **`WithRaster*` option helpers** (9 helpers): `WithRasterLogger`, `WithRasterFormat`, `WithRasterCreationOption`, `WithRasterOutputBounds`, `WithRasterBands`, `WithRasterResamplingAlg`, `WithRasterTargetResolution`, `WithRasterCutline`, `WithRasterRawOptions`. Each maps 1:1 to a `gdal_translate` / `gdalwarp` CLI flag. (PR #20, PR #21)
+- **`ErrConvertFailed`** sentinel for the conversion subsystem. Wrap-recoverable via `errors.As` into `*GISError`; `GISError.Op` disambiguates the conversion entry point (`"ConvertVector"` / `"ConvertRaster"` / `"ReprojectRaster"`). (PR #19)
+- **`cmd/gisconvert`** — CLI counterpart binary. Stdlib `flag` only — no new runtime deps. Vector mode covers all `WithVector*` options; raster mode covers all `WithRaster*` options including a `-cog` shortcut and reprojection trigger via `-s-srs` + `-t-srs`. (PR #23)
+- **Manifest-driven `make fetch-testdata`.** Real-world geo fixtures (Natural Earth countries Shapefile + GeoJSON, rasterio `RGB.byte.tif`, rio-tiler `cog.tif`) are downloaded on demand into a gitignored sibling `testdata-fetched/` directory with sha256 verification. CI caches the fetched payload keyed on the manifest hash. (PR #17)
+- **`docs/conversions.md`** — full conversion reference with vector + raster + reprojection examples and the cloud-I/O VFS matrix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). (PR #22)
+- **README "Conversion" section** — top-level discoverability pointing at `docs/conversions.md`. (PR #22)
+- **`examples/convert_pipeline/`** — 30-line program exercising `ConvertVector` with reprojection + bbox clip + WHERE filter + simplification, validating the new API surface from a caller's perspective.
 
-- **`docs/conversions.md`** — full reference for the v1.2 conversion subsystem with vector + raster + reprojection examples and the cloud-I/O VFS matrix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). Linked from the README. (PR 5 of v1.2)
-- **README "Conversion" section** — top-level overview pointing at `docs/conversions.md`. (PR 5 of v1.2)
-- **`/vsimem/` destination unit test** for `ConvertVector` — proves the cloud-aware I/O works in-process without network or filesystem write. (PR 5 of v1.2)
+### Changed
 
-- **`ReprojectRaster(ctx, src, dst, srcSRS, dstSRS, opts...) error`** — raster reprojection (the `gdalwarp` equivalent). Pairs with the EPSG:4326↔EPSG:3857 web-tile workflow but accepts any GDAL-friendly CRS. Reuses the `RasterConvertOption` type — chain with `WithRasterResamplingAlg`, `WithRasterTargetResolution`, `WithRasterCutline` for the typical "warp + clip" pipeline. Cutline support emits `-cutline` + `-cl` + `-crop_to_cutline`. (PR 4 of v1.2)
-- **`ConvertRaster(ctx, src, dst, opts...) error`** — generic raster format conversion (GeoTIFF → COG, GeoTIFF → PNG, band-subset, output-window). Thin wrapper around the C entry point behind `gdal_translate` (`gdal.Translate`). (PR 3 of v1.2)
-- **`ToCOG(ctx, src, dst, opts...) error`** — convenience wrapper that pre-fills `WithRasterFormat("COG")` plus sane defaults (`COMPRESS=DEFLATE`, `BLOCKSIZE=512`, `OVERVIEW_RESAMPLING=NEAREST`). Caller-supplied options override defaults — pass `WithRasterCreationOption("COMPRESS", "ZSTD")` to swap codecs. (PR 3 of v1.2)
-- **`WithRaster*` option helpers**: `WithRasterLogger`, `WithRasterFormat`, `WithRasterCreationOption`, `WithRasterOutputBounds`, `WithRasterBands`, `WithRasterResamplingAlg`, `WithRasterTargetResolution`, `WithRasterCutline`, `WithRasterRawOptions`. Each maps 1:1 to a `gdal_translate` / `gdalwarp` CLI flag. The cutline option is wired only on the warp-side (PR 4); `gdal_translate` does not support cutlines. (PR 3 of v1.2)
-- **`ConvertVector(ctx, src, dst, opts...) error`** — vector format conversion (GeoJSON ↔ GeoPackage ↔ Shapefile ↔ FlatGeobuf ↔ KML) plus reprojection, bbox clip, attribute filter, simplification, field-select, and layer rename. Thin wrapper around the C entry point behind `ogr2ogr` (`gdal.VectorTranslate`). Stateless — does NOT require a `*ManagerConfig`. (PR 2 of v1.2)
-- **`WithVector*` option helpers**: `WithVectorLogger`, `WithVectorFormat`, `WithVectorSourceSRS`, `WithVectorTargetSRS`, `WithVectorBoundingBox`, `WithVectorWhere`, `WithVectorSimplify`, `WithVectorSelectFields`, `WithVectorLayerName`, `WithVectorOverwrite`, `WithVectorRawOptions`. Each maps 1:1 to a `ogr2ogr` CLI flag. (PR 2 of v1.2)
-- **`ErrConvertFailed`** sentinel for the conversion subsystem. Wrap-recoverable via `errors.As` into `*GISError`; `GISError.Op` disambiguates the conversion entry point. (PR 2 of v1.2)
-- **Manifest-driven `make fetch-testdata`.** Real-world geo fixtures (Natural Earth countries, rasterio `RGB.byte.tif`, rio-tiler `cog.tif`, plus more in subsequent PRs) are downloaded into the gitignored sibling `testdata-fetched/` directory on demand, with sha256 verification on each fetch. CI caches the fetched payload keyed on the manifest hash, so cold-runs pay ~3 s of network and warm-runs are zero-network. Tracked: `testdata/manifest.sha256`, `testdata/LICENSES.md`, `testdata/README.md`, `scripts/fetch-testdata.sh`, `testdata-fetched/.gitignore`. Untracked: the binaries themselves. The fetched fixtures live in a sibling directory (not under `testdata/`) so the existing `TestGetGISFiles` unit test and `TestPublishAll_EndToEnd` integration test — both of which walk `./testdata/` — are unaffected. (PR 1 of v1.2)
+- **None.** All v1.2 additions are surface-additive — existing v1.1.x code paths are byte-for-byte unchanged.
+
+### Tests
+
+- 13-case table-driven unit test for `buildVectorTranslateArgs` option → `ogr2ogr` arg mapping. (PR #19)
+- 11-case table-driven unit test for `buildTranslateArgs` option → `gdal_translate` arg mapping. (PR #20)
+- 7-case table-driven unit test for `buildWarpArgs` option → `gdalwarp` arg mapping. (PR #21)
+- ctx-canceled fast-fail and source-open error wrapping for all four conversion entry points.
+- `/vsimem/` destination unit test for `ConvertVector` — exercises the cloud-aware I/O without network or filesystem write. (PR #22)
+- Integration: Shapefile (via `/vsizip/`) → GeoPackage with feature-count parity. (PR #19)
+- Integration: GeoJSON → GeoPackage with reproject (4326 → 3857) + bbox clip + WHERE filter + EPSG:3857 SRS verification. (PR #19)
+- Integration: GeoTIFF → COG with COG driver + overview-count assertion. (PR #20)
+- Integration: GeoTIFF → PNG with band selection. (PR #20)
+- Integration: `RGB.byte.tif` (EPSG:32618) → EPSG:3857 reprojection with bilinear resampling. (PR #21)
+- 9-case unit suite for `cmd/gisconvert` flag → option mapping (`parseBBox`, `parseBands`, `parseRes`, repeated `-co`, missing-arg rejection, raster-reproject SRS validation). (PR #23)
+
+### Known limitations
+
+- **No progress callbacks.** `lukeroth/gdal`'s utility wrappers don't thread `pfnProgress` through `VectorTranslate`/`Warp`/`Translate`. Long conversions are opaque from the Go side. Tracked for v1.3 (needs an upstream binding patch).
+- **No mid-conversion cancellation.** `ctx` is honored at the function boundary (before `OpenEx`); the underlying CGo call is synchronous and uninterruptible.
+- **Silent failure on unknown drivers.** When `WithVectorFormat` / `WithRasterFormat` names a driver GDAL doesn't have, the C-level option parsing fails with stderr noise but `cerr=0`, so the Go wrapper returns `nil`. Pre-validate driver names on the caller side for a hard guarantee.
+- **Bare `.zip` Shapefile bundles do not auto-prefix.** Pass `/vsizip/<path>` explicitly, or pre-extract via `GetGISFiles`.
+- **No GeoParquet, no PMTiles.** GeoParquet driver in GDAL 3.8+ but ecosystem is still settling — revisit in v1.3. PMTiles needs Tippecanoe (separate dependency, out of GDAL scope).
 
 ## [1.1.0] — 2026-05-04
 
