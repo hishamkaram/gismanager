@@ -173,6 +173,8 @@ func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err
 			driver = gdal.OGRDriverByName(geoJSONDriver)
 		case ".kml":
 			driver = gdal.OGRDriverByName(kmlDriver)
+		case ".parquet":
+			driver = gdal.OGRDriverByName(parquetDriver)
 		default:
 			err = newGISError("GetDriver", path, ErrUnsupportedFormat, nil)
 			manager.logger.Error("get driver", "path", path, "err", err)

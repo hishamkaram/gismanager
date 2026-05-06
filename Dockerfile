@@ -21,15 +21,22 @@ ARG GOVULNCHECK_VERSION=latest
 # Base image is digest-pinned to immunize the build from upstream re-tags
 # (the OSGeo image is occasionally re-pushed for security patches; without a
 # digest pin a "no-op" CI re-run can suddenly pull a different filesystem).
-# Tag-equivalent at pin time: ghcr.io/osgeo/gdal:ubuntu-small-3.12.4 (multi-arch
+#
+# Tag-equivalent at pin time: ghcr.io/osgeo/gdal:ubuntu-full-3.12.4 (multi-arch
 # manifest list covering linux/amd64 and linux/arm64).
 #
-# To re-pin (when bumping GDAL_VERSION or pulling in upstream patches):
-#   docker buildx imagetools inspect ghcr.io/osgeo/gdal:ubuntu-small-<new>
-# captures the manifest list digest. Update both the digest and GDAL_VERSION
-# together — they must stay in sync since downstream tooling (e.g. CGo
-# linker) reads the GDAL version from the actual image.
-ARG GDAL_BASE_DIGEST=sha256:9acfdf967ece13a9a1d9622a494d726aad6b9759aeaae40bbd4d8cb74c843971
+# v1.4 swapped the base from `ubuntu-small` to `ubuntu-full` to bring the
+# Apache Parquet driver (and therefore GeoParquet support) into both the
+# dev image and the published runtime image. Trade-off: image size grew
+# from ~2 GB to ~4 GB. Operators who don't need GeoParquet can pin
+# GDAL_BASE_DIGEST back to the ubuntu-small manifest list for a lighter
+# image — see docs/conversions.md.
+#
+# To re-pin (when bumping GDAL or pulling in upstream patches):
+#   docker buildx imagetools inspect ghcr.io/osgeo/gdal:ubuntu-full-<new>
+# captures the manifest list digest. Keep the version in the comment
+# above in sync with the digest below.
+ARG GDAL_BASE_DIGEST=sha256:5828162cffed3af330034ae0c3ada30deb1cfdaecf37585f96ed0924f1d1dfb7
 
 # ---------------------------------------------------------------------------
 # Stage 1: dev — Go + GDAL dev headers + tooling
@@ -56,14 +63,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 #
 # Switch to Azure's Ubuntu mirror first (co-located with the GHA runner
 # network; significantly more reliable than the public archive.ubuntu.com
-# mirror, which periodically returns connection-refused). Then
-# Acquire::Retries=3 absorbs any per-package transient at the apt layer.
+# mirror, which periodically returns connection-refused). The 5-second
+# reachability probe before the rewrite means developers building locally
+# OFF the Azure network (i.e. anywhere outside GHA) automatically fall
+# back to the original archive.ubuntu.com sources rather than hanging
+# on a dead Azure-mirror connection. Then Acquire::Retries=3 absorbs
+# any per-package transient at the apt layer.
 RUN set -eux; \
-    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ] && \
+       curl -fsS --connect-timeout 5 -o /dev/null \
+            http://azure.archive.ubuntu.com/ubuntu/ 2>/dev/null; then \
+        echo "Azure Ubuntu mirror reachable — switching apt sources"; \
         sed -i \
             -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g' \
             -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' \
             /etc/apt/sources.list.d/ubuntu.sources; \
+    else \
+        echo "Azure Ubuntu mirror unreachable — keeping default sources"; \
     fi; \
     apt-get -o Acquire::Retries=3 update; \
     apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
