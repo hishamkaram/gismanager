@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/v2/errs"
 )
 
 // TestBuildVectorTranslateArgs is a table-driven unit test that locks in

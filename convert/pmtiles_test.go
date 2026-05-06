@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/v2/errs"
 )
 
 func TestToPMTiles_CtxCanceledFastFail(t *testing.T) {

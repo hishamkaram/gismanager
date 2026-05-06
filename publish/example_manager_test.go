@@ -11,7 +11,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hishamkaram/gismanager/publish"
+	"github.com/hishamkaram/gismanager/v2/publish"
 )
 
 // ExampleManager_PublishAll demonstrates the high-level publish

@@ -8,7 +8,7 @@ import (
 	"github.com/lukeroth/gdal"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/v2/errs"
 )
 
 func TestFromConfig(t *testing.T) {

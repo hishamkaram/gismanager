@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
-	"github.com/hishamkaram/gismanager/internal/slogx"
-	"github.com/hishamkaram/gismanager/internal/zipx"
+	"github.com/hishamkaram/gismanager/v2/errs"
+	"github.com/hishamkaram/gismanager/v2/internal/slogx"
+	"github.com/hishamkaram/gismanager/v2/internal/zipx"
 
 	// PostgreSQL driver registered via blank import for database/sql.
 	_ "github.com/lib/pq"

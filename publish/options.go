@@ -3,7 +3,7 @@ package publish
 import (
 	"log/slog"
 
-	"github.com/hishamkaram/gismanager/internal/slogx"
+	"github.com/hishamkaram/gismanager/v2/internal/slogx"
 )
 
 // Option configures a [Manager] at construction time. Pass options to

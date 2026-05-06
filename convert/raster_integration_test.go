@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager/convert"
+	"github.com/hishamkaram/gismanager/v2/convert"
 )
 
 // TestConvertRaster_GeoTIFFToCOG_Integration exercises the most common

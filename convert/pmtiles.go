@@ -9,8 +9,8 @@ import (
 
 	"github.com/protomaps/go-pmtiles/pmtiles"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
-	"github.com/hishamkaram/gismanager/internal/slogx"
+	"github.com/hishamkaram/gismanager/v2/errs"
+	"github.com/hishamkaram/gismanager/v2/internal/slogx"
 )
 
 // PMTilesOption configures [ToPMTiles] at call time.

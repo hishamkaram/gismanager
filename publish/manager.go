@@ -11,7 +11,7 @@ import (
 	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/v2/errs"
 )
 
 // GeoserverConfig holds the GeoServer endpoint and credentials. WorkspaceName

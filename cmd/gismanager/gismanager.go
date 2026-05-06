@@ -11,8 +11,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/hishamkaram/gismanager/cmd/internal/cli"
-	"github.com/hishamkaram/gismanager/publish"
+	"github.com/hishamkaram/gismanager/v2/cmd/internal/cli"
+	"github.com/hishamkaram/gismanager/v2/publish"
 )
 
 func main() { os.Exit(realMain()) }

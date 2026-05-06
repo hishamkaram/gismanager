@@ -11,8 +11,8 @@
 // All re-exported declarations are marked Deprecated; new code should
 // import the relevant subpackage directly:
 //
-//	import "github.com/hishamkaram/gismanager/convert"
-//	import "github.com/hishamkaram/gismanager/publish"
+//	import "github.com/hishamkaram/gismanager/v2/convert"
+//	import "github.com/hishamkaram/gismanager/v2/publish"
 //
 // v2 (the next major release) drops this root-level compatibility
 // shim. The v2 module path is github.com/hishamkaram/gismanager/v2;

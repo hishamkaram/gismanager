@@ -6,7 +6,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/v2/errs"
 )
 
 // ReprojectRaster reprojects the raster source at src into dst, going

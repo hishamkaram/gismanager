@@ -29,7 +29,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/v2/publish"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -101,15 +101,15 @@ func main() {
 	logger := otelslog.NewLogger("gismanager",
 		otelslog.WithLoggerProvider(provider))
 
-	mgr, err := gismanager.New(
-		gismanager.WithLogger(logger),
-		gismanager.WithGeoserver(gismanager.GeoserverConfig{
+	mgr, err := publish.New(
+		publish.WithLogger(logger),
+		publish.WithGeoserver(publish.GeoserverConfig{
 			ServerURL:     *gsURL,
 			Username:      *gsUser,
 			Password:      *gsPass,
 			WorkspaceName: "demo",
 		}),
-		gismanager.WithDatastore(gismanager.DatastoreConfig{
+		publish.WithDatastore(publish.DatastoreConfig{
 			Host:   *pgHost,
 			Port:   *pgPort,
 			DBName: *pgDB,
@@ -117,7 +117,7 @@ func main() {
 			DBPass: *pgPass,
 			Name:   "gismanager_demo",
 		}),
-		gismanager.WithSource(gismanager.SourceConfig{Path: *srcPath}),
+		publish.WithSource(publish.SourceConfig{Path: *srcPath}),
 	)
 	if err != nil {
 		logger.Error("construct manager", "err", err)

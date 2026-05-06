@@ -53,7 +53,7 @@ build: ## go build ./...
 LDFLAGS_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 LDFLAGS_DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS_PKG     := github.com/hishamkaram/gismanager/cmd/internal/cli
+LDFLAGS_PKG     := github.com/hishamkaram/gismanager/v2/cmd/internal/cli
 LDFLAGS         := -X $(LDFLAGS_PKG).Version=$(LDFLAGS_VERSION) \
                    -X $(LDFLAGS_PKG).Commit=$(LDFLAGS_COMMIT) \
                    -X $(LDFLAGS_PKG).Date=$(LDFLAGS_DATE)

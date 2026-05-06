@@ -17,8 +17,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hishamkaram/gismanager/convert"
-	"github.com/hishamkaram/gismanager/publish"
+	"github.com/hishamkaram/gismanager/v2/convert"
+	"github.com/hishamkaram/gismanager/v2/publish"
 )
 
 // TestConvertVector_GeoParquetRoundTrip_Integration round-trips a

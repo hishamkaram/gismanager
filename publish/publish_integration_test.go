@@ -15,8 +15,8 @@ import (
 	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/hishamkaram/geoserver/v2/rest/workspaces"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
-	"github.com/hishamkaram/gismanager/publish"
+	"github.com/hishamkaram/gismanager/v2/errs"
+	"github.com/hishamkaram/gismanager/v2/publish"
 )
 
 // integrationConfig builds a *publish.Manager from the environment.
