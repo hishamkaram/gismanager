@@ -29,7 +29,7 @@ ARGS ?=
 GEOSERVER_VERSION ?= 2.28.0
 
 .PHONY: help dev shell build build-cli test test-unit test-integration lint lint-fix \
-        vuln tidy fmt vet image clean fetch-testdata \
+        vuln tidy fmt vet image clean fetch-testdata ci benchmark \
         compose-up compose-down compose-test-up compose-test-down compose-test-logs
 
 help: ## show this help
@@ -68,6 +68,20 @@ test-unit: ## go test -race ./... (no integration tag)
 
 test-integration: fetch-testdata ## go test -tags=integration ./... inside the test-runner container against the compose-test stack (requires compose-test-up first)
 	$(COMPOSE_TEST) run --rm -T test-runner go test -race -tags=integration -timeout=15m -count=1 $(ARGS) ./...
+
+# CI umbrella: the four checks every PR's CI matrix runs in ~3 min.
+# Excludes test-integration on purpose — that needs a live stack and
+# is its own `make test-integration` target. Run that separately via
+# `make compose-test-up && make test-integration && make compose-test-down`
+# (or via the `/integration-test` slash command).
+ci: lint vet test-unit vuln ## fast CI proxy: lint + vet + unit + vuln (no integration)
+
+# Benchmarks. The repo currently has no `func Benchmark*` cases, but
+# `make benchmark` is wired so a future `BenchmarkPublishAll` /
+# `BenchmarkConvertVector` can be exercised the same way as the rest
+# of the test surface. Pass `-benchtime=`, `-cpu=`, etc. via ARGS.
+benchmark: ## go test -bench=. -benchmem ./... (no benchmarks yet; placeholder for future)
+	$(RUN) go test -bench=. -benchmem -run='^$$' $(ARGS) ./...
 
 fetch-testdata: ## download/refresh testdata fixtures listed in testdata/manifest.sha256 (idempotent; runs on host since curl + sha256sum are stdlib)
 	@bash scripts/fetch-testdata.sh
