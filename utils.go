@@ -38,12 +38,24 @@ func FromConfig(configFile string) (*ManagerConfig, error) {
 		logger.Error("unmarshal yaml", "path", absPath, "err", unmarshalErr)
 		return nil, newGISError("FromConfig", absPath, ErrConfigInvalid, unmarshalErr)
 	}
-	return New(
+	// Apply ${VAR} substitution to operator-supplied string fields
+	// before validation so a YAML referencing $PG_PASSWORD doesn't
+	// trip the "password is required" check.
+	decoded.expandEnv()
+	m, err := New(
 		WithLogger(logger),
 		WithGeoserver(decoded.Geoserver),
 		WithDatastore(decoded.Datastore),
 		WithSource(decoded.Source),
 	)
+	if err != nil {
+		return nil, err
+	}
+	if err := m.Validate(); err != nil {
+		logger.Error("validate config", "path", absPath, "err", err)
+		return nil, err
+	}
+	return m, nil
 }
 
 func isSupported(ext string) bool {

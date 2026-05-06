@@ -2,7 +2,9 @@ package gismanager
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -32,6 +34,90 @@ type ManagerConfig struct {
 	Datastore DatastoreConfig `yaml:"datastore"`
 	Source    SourceConfig    `yaml:"source"`
 	logger    *slog.Logger
+}
+
+// Validate checks that every required field on a ManagerConfig is set
+// to a non-zero value and reports the missing fields in a single error.
+// The error wraps [ErrConfigInvalid]; recover the field list via
+// [errors.As] into [*GISError] and inspect Cause.Error().
+//
+// Validate covers the publish-pipeline contract — every field needed
+// for the walk → PostGIS-load → GeoServer-publish flow. Programmatic
+// callers using only a subset of the manager's surface (e.g.
+// OpenSource for ad-hoc reads) can skip Validate entirely; only
+// [FromConfig] calls it automatically, since YAML callers signal
+// "I intend a full publish setup" by writing the YAML in the first
+// place.
+func (c *ManagerConfig) Validate() error {
+	var problems []string
+	if c.Geoserver.ServerURL == "" {
+		problems = append(problems, "geoserver.url is required")
+	}
+	if c.Geoserver.WorkspaceName == "" {
+		problems = append(problems, "geoserver.workspace is required")
+	}
+	if c.Geoserver.Username == "" {
+		problems = append(problems, "geoserver.username is required")
+	}
+	if c.Geoserver.Password == "" {
+		problems = append(problems, "geoserver.password is required")
+	}
+	if c.Datastore.Host == "" {
+		problems = append(problems, "datastore.host is required")
+	}
+	if c.Datastore.Port == 0 {
+		problems = append(problems, "datastore.port is required (and non-zero)")
+	}
+	if c.Datastore.DBName == "" {
+		problems = append(problems, "datastore.database is required")
+	}
+	if c.Datastore.DBUser == "" {
+		problems = append(problems, "datastore.username is required")
+	}
+	if c.Datastore.DBPass == "" {
+		problems = append(problems, "datastore.password is required")
+	}
+	if c.Datastore.Name == "" {
+		problems = append(problems, "datastore.name is required")
+	}
+	if c.Source.Path == "" {
+		problems = append(problems, "source.path is required")
+	}
+	if len(problems) > 0 {
+		return newGISError("Validate", "", ErrConfigInvalid,
+			errors.New(strings.Join(problems, "; ")))
+	}
+	return nil
+}
+
+// expandEnv applies os.ExpandEnv (`$VAR` and `${VAR}` substitution) to
+// every operator-supplied string field on the manager config. Used
+// internally by [FromConfig] after YAML decode and before validation,
+// so YAML files can reference secrets without inlining them:
+//
+//	geoserver:
+//	  password: ${GEOSERVER_PASSWORD}
+//	datastore:
+//	  password: ${PG_PASSWORD}
+//
+// Variables that aren't set in the environment resolve to empty strings
+// (matching os.ExpandEnv); Validate then rejects the empty result with a
+// useful field-name error message.
+//
+// Datastore.Port (uint) is not expanded — port numbers should come from
+// config, not env vars; if a user truly needs a parameterized port they
+// should set it via the [WithDatastore] option in code.
+func (c *ManagerConfig) expandEnv() {
+	c.Geoserver.ServerURL = os.ExpandEnv(c.Geoserver.ServerURL)
+	c.Geoserver.WorkspaceName = os.ExpandEnv(c.Geoserver.WorkspaceName)
+	c.Geoserver.Username = os.ExpandEnv(c.Geoserver.Username)
+	c.Geoserver.Password = os.ExpandEnv(c.Geoserver.Password)
+	c.Datastore.Host = os.ExpandEnv(c.Datastore.Host)
+	c.Datastore.DBName = os.ExpandEnv(c.Datastore.DBName)
+	c.Datastore.DBUser = os.ExpandEnv(c.Datastore.DBUser)
+	c.Datastore.DBPass = os.ExpandEnv(c.Datastore.DBPass)
+	c.Datastore.Name = os.ExpandEnv(c.Datastore.Name)
+	c.Source.Path = os.ExpandEnv(c.Source.Path)
 }
 
 // GetGeoserverCatalog returns a GeoServer v2 client configured against the

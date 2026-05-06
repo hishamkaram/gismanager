@@ -1,0 +1,11 @@
+# Deliberately incomplete: missing geoserver.password, datastore.host,
+# datastore.username, source.path. Drives TestFromConfig_RejectsMissing.
+geoserver:
+  url: http://localhost:8080/geoserver
+  username: admin
+  workspace: golang
+datastore:
+  port: 5432
+  database: gis
+  password: golang
+  name: gismanager_data
