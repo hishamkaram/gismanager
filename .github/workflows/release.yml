@@ -97,30 +97,45 @@ jobs:
 
       # ---------- Raw amd64 binaries --------------------------------------
       #
-      # We rebuild the binaries on the host runner (with a static GDAL
-      # apt-installed) rather than copying out of the multi-arch image,
-      # because docker buildx --platform=linux/amd64,linux/arm64 stores
-      # both arches in a manifest list and `docker create` to extract
-      # binaries works on a single-arch image only. Building once more
-      # for amd64 with the same Dockerfile build stage is the simplest
-      # path and re-uses the already-warm Buildx cache.
+      # Strategy: re-run buildx for the single linux/amd64 target=runtime
+      # stage with `load: true` so the resulting image is hydrated into
+      # the local Docker daemon's image store (multi-arch buildx with
+      # --push doesn't populate the local daemon, so we'd otherwise have
+      # to re-pull from ghcr.io to extract). Then `docker create` +
+      # `docker cp` pulls just the three binaries — fast (~10s) because
+      # docker cp doesn't copy unrelated layers. The cache-from scope is
+      # the same as the multi-arch step so the GHA layer cache is warm
+      # and the rebuild is mostly a relink rather than a full Go build.
+      #
+      # Why not `--output type=local,dest=./...`? That extracts the
+      # entire build-stage filesystem (~4 GB on ubuntu-full), which on
+      # the v1.4.0 cut hung the runner past the 60-min monitor window.
+      # docker cp scoped to /usr/local/bin/<binary> is two orders of
+      # magnitude faster.
 
-      - name: Build amd64 binaries (extract from single-arch build)
+      - name: Build amd64 runtime image into local Docker daemon
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          load: true
+          tags: gismanager:amd64-extract
+          cache-from: type=gha,scope=runtime-image
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.COMMIT }}
+            DATE=${{ env.DATE }}
+
+      - name: Extract amd64 binaries via docker create + docker cp
         run: |
           set -ex
           mkdir -p dist
-          docker buildx build \
-            --platform linux/amd64 \
-            --target build \
-            --build-arg "VERSION=${VERSION}" \
-            --build-arg "COMMIT=${COMMIT}" \
-            --build-arg "DATE=${DATE}" \
-            --output type=local,dest=./dist-build \
-            .
-          # The build stage writes binaries to /out; --output=local copies
-          # the entire image fs, so we pull the three binaries from /out.
+          container_id=$(docker create gismanager:amd64-extract)
+          trap 'docker rm "${container_id}" >/dev/null || true' EXIT
           for bin in gismanager layerSchema gisconvert; do
-            cp "dist-build/out/${bin}" "dist/${bin}"
+            docker cp "${container_id}:/usr/local/bin/${bin}" "dist/${bin}"
             chmod +x "dist/${bin}"
           done
           ls -la dist/
