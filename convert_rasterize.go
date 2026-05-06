@@ -191,7 +191,7 @@ func Rasterize(ctx context.Context, vectorSrc, rasterDst string, opts ...Rasteri
 		return newGISError("Rasterize", fmt.Sprintf("%s -> %s", vectorSrc, rasterDst),
 			ErrConvertFailed, rErr)
 	}
-	out.Close()
+	defer out.Close()
 	return nil
 }
 

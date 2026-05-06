@@ -198,7 +198,7 @@ func DEMProcessing(ctx context.Context, src, dst, mode string, opts ...DEMOption
 		return newGISError("DEMProcessing", fmt.Sprintf("%s -> %s", src, dst),
 			ErrConvertFailed, dErr)
 	}
-	out.Close()
+	defer out.Close()
 	return nil
 }
 

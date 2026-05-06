@@ -65,7 +65,7 @@ func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts 
 		return newGISError("ReprojectRaster", fmt.Sprintf("%s -> %s", src, dst),
 			ErrConvertFailed, wErr)
 	}
-	out.Close()
+	defer out.Close()
 	return nil
 }
 
