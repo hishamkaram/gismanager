@@ -4,9 +4,25 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"sync"
 
 	"github.com/lukeroth/gdal"
 )
+
+// defaultPublishConcurrency caps how many GeoServer feature-type
+// creations PublishAll dispatches in parallel. The publish step is
+// HTTP-only (no GDAL CGo, no PostGIS connection from gismanager —
+// GeoServer queries PostGIS itself), so it parallelizes cleanly. The
+// upstream walk and the LayerToPostgis CopyLayer call stay serial
+// because both touch the shared *gdal.DataSource and the underlying
+// CGo handle is not reentrancy-safe across goroutines.
+//
+// Default 8 was picked from typical observation: GeoServer FeatureType
+// creation is ~100-500ms per call, so 8 parallel takes ~50ms aggregate
+// per layer instead of ~250ms. Higher concurrency mostly bottlenecks
+// on GeoServer's own thread pool rather than gismanager. Expose as a
+// functional option in v1.5+ if there's demand to tune.
+const defaultPublishConcurrency = 8
 
 // WalkItem is one yielded element of [(*ManagerConfig).Walk]: a
 // (path, layer) pair the caller can consume.
@@ -114,6 +130,20 @@ func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSo
 // (re-using it across every file's layers), so the caller doesn't pay
 // the per-file PostGIS-open cost.
 //
+// Concurrency model (since v1.4):
+//
+//   - Walk and LayerToPostgis are SERIAL across the whole call. Both
+//     touch the shared *gdal.DataSource (the PostGIS target) and the
+//     underlying CGo handle is not reentrancy-safe across goroutines.
+//   - PublishGeoserverLayer (HTTP-only — GeoServer queries PostGIS
+//     itself; gismanager just registers the feature type) runs in a
+//     bounded worker pool of [defaultPublishConcurrency] goroutines.
+//     Layers with publish-side latency (typical GeoServer
+//     FeatureType.Create is 100-500ms) overlap, so a 50-layer publish
+//     takes O(N/8 * latency) instead of O(N * latency).
+//   - The publish-side ordering is therefore non-deterministic, but
+//     that has never been part of PublishAll's contract.
+//
 // Error semantics (since v1.4):
 //
 //   - Setup failures abort the operation. If [(*ManagerConfig).OpenSource]
@@ -121,7 +151,8 @@ func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSo
 //     error directly without attempting any layer.
 //   - Per-layer failures (walk errors, PostGIS load errors, GeoServer
 //     publish errors) do NOT abort the loop. Each is logged via the
-//     manager's logger AND collected for aggregation.
+//     manager's logger AND collected for aggregation. Aggregation is
+//     mutex-protected since publish goroutines run concurrently.
 //   - The final return value is [errors.Join] of every collected
 //     per-layer error, or nil if every layer succeeded.
 //
@@ -158,28 +189,82 @@ func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
 	}
 	defer target.Destroy()
 
-	var perLayerErrs []error
+	// Pre-warm the workspace + datastore once, serially, BEFORE
+	// dispatching the parallel publish goroutines. Without this, N
+	// publish goroutines hit the Get-not-found branch of ensure*
+	// simultaneously and race to Create. For workspaces that surfaces
+	// as a clean 409 Conflict (geoserver.ErrConflict), but for
+	// datastores GeoServer instead returns 500 with "already exists"
+	// in the body — a non-idempotent wire-format quirk that's hard to
+	// match defensively. Pre-warming sidesteps the race entirely:
+	// every per-layer ensureWorkspace / ensureDatastore call finds
+	// the resource on the Get and short-circuits. (The conflict
+	// tolerance in ensureWorkspace is still useful as defense-in-depth
+	// for callers invoking PublishGeoserverLayer directly without
+	// going through PublishAll.)
+	catalog, catErr := manager.GetGeoserverCatalog()
+	if catErr != nil {
+		return newGISError("PublishAll", "", ErrGeoServerPublish, catErr)
+	}
+	if wsErr := ensureWorkspace(ctx, catalog, manager.Geoserver.WorkspaceName); wsErr != nil {
+		return wsErr
+	}
+	if dsErr := ensureDatastore(ctx, catalog, manager.Geoserver.WorkspaceName, manager.Datastore); dsErr != nil {
+		return dsErr
+	}
+
+	// Bounded worker pool for the publish step. The semaphore acts as
+	// the concurrency gate; wg ensures we wait for every dispatched
+	// publish before returning. errsMu protects perLayerErrs from
+	// concurrent writes by the publish goroutines.
+	sem := make(chan struct{}, defaultPublishConcurrency)
+	var wg sync.WaitGroup
+	var errsMu sync.Mutex
+	perLayerErrs := []error{}
+
+	recordErr := func(err error) {
+		errsMu.Lock()
+		perLayerErrs = append(perLayerErrs, err)
+		errsMu.Unlock()
+	}
+
 	for item, walkErr := range manager.Walk(ctx) {
 		if walkErr != nil {
 			logger.Error("walk", "err", walkErr)
-			perLayerErrs = append(perLayerErrs, walkErr)
+			recordErr(walkErr)
 			continue
 		}
 		newLayer, postgisErr := item.Layer.LayerToPostgis(target, manager, true)
 		if postgisErr != nil {
 			logger.Error("load to postgis", "file", item.Path, "err", postgisErr)
-			perLayerErrs = append(perLayerErrs, postgisErr)
+			recordErr(postgisErr)
 			continue
 		}
 		if newLayer == nil || newLayer.Layer == nil {
 			continue
 		}
-		if pubErr := manager.PublishGeoserverLayer(ctx, newLayer); pubErr != nil {
-			logger.Error("publish", "file", item.Path, "err", pubErr)
-			perLayerErrs = append(perLayerErrs, pubErr)
-			continue
-		}
-		logger.Info("published", "file", item.Path, "layer", newLayer.Name())
+
+		// Dispatch the publish step into the worker pool. Acquiring
+		// the semaphore here (BEFORE go func) means a producer that
+		// outpaces the publishers blocks on the channel send rather
+		// than spawning unbounded goroutines.
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(item WalkItem, newLayer *GdalLayer) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if pubErr := manager.PublishGeoserverLayer(ctx, newLayer); pubErr != nil {
+				logger.Error("publish", "file", item.Path, "err", pubErr)
+				recordErr(pubErr)
+				return
+			}
+			logger.Info("published", "file", item.Path, "layer", newLayer.Name())
+		}(item, newLayer)
 	}
+
+	// Drain the worker pool before reading the error slice. wg.Wait()
+	// is the synchronization point that publishes every recordErr
+	// write to the goroutine reading perLayerErrs below.
+	wg.Wait()
 	return errors.Join(perLayerErrs...)
 }

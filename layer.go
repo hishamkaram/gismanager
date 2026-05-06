@@ -116,6 +116,14 @@ func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *
 // Callers (notably PublishGeoserverLayer) typically re-wrap the returned
 // *GISError with their own Op for the public-facing error envelope; the
 // inner GISError remains reachable via Unwrap for finer-grained triage.
+//
+// Concurrent-call safety: when N goroutines all hit the Get-not-found
+// branch simultaneously, only the first Create wins; the rest receive
+// 409 Conflict ([geoserver.ErrConflict]). That outcome is operationally
+// equivalent to "workspace exists" — exactly what the ensure semantics
+// promise — so we treat ErrConflict as success rather than propagating
+// the race up to the caller. PublishAll's worker-pool publish path
+// depends on this idempotency.
 func ensureWorkspace(ctx context.Context, c *geoserver.Client, name string) error {
 	if _, err := c.Workspaces.Get(ctx, name); err == nil {
 		return nil
@@ -123,15 +131,19 @@ func ensureWorkspace(ctx context.Context, c *geoserver.Client, name string) erro
 		return newGISError("ensureWorkspace", name, ErrGeoServerPublish, err)
 	}
 	if err := c.Workspaces.Create(ctx, &workspaces.Workspace{Name: name}); err != nil {
+		if errors.Is(err, geoserver.ErrConflict) {
+			return nil
+		}
 		return newGISError("ensureWorkspace", name, ErrGeoServerPublish, err)
 	}
 	return nil
 }
 
 // ensureDatastore looks up the PostGIS-backed datastore in the given
-// workspace and creates it if missing. Same error-wrapping contract as
-// [ensureWorkspace] — errors are *GISError with Op="ensureDatastore" and
-// Sentinel=ErrGeoServerPublish.
+// workspace and creates it if missing. Same error-wrapping contract and
+// same concurrent-create idempotency (ErrConflict treated as success)
+// as [ensureWorkspace] — errors are *GISError with Op="ensureDatastore"
+// and Sentinel=ErrGeoServerPublish.
 func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds DatastoreConfig) error {
 	scoped := c.Datastores.InWorkspace(ws)
 	if _, err := scoped.Get(ctx, ds.Name); err == nil {
@@ -148,6 +160,9 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 		Password: ds.DBPass,
 	}
 	if err := scoped.Create(ctx, conn); err != nil {
+		if errors.Is(err, geoserver.ErrConflict) {
+			return nil
+		}
 		return newGISError("ensureDatastore", ds.Name, ErrGeoServerPublish, err)
 	}
 	return nil
