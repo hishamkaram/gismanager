@@ -18,10 +18,23 @@ ARG GO_VERSION=1.25.9
 ARG GOLANGCI_LINT_VERSION=v2.12.1
 ARG GOVULNCHECK_VERSION=latest
 
+# Base image is digest-pinned to immunize the build from upstream re-tags
+# (the OSGeo image is occasionally re-pushed for security patches; without a
+# digest pin a "no-op" CI re-run can suddenly pull a different filesystem).
+# Tag-equivalent at pin time: ghcr.io/osgeo/gdal:ubuntu-small-3.12.4 (multi-arch
+# manifest list covering linux/amd64 and linux/arm64).
+#
+# To re-pin (when bumping GDAL_VERSION or pulling in upstream patches):
+#   docker buildx imagetools inspect ghcr.io/osgeo/gdal:ubuntu-small-<new>
+# captures the manifest list digest. Update both the digest and GDAL_VERSION
+# together — they must stay in sync since downstream tooling (e.g. CGo
+# linker) reads the GDAL version from the actual image.
+ARG GDAL_BASE_DIGEST=sha256:9acfdf967ece13a9a1d9622a494d726aad6b9759aeaae40bbd4d8cb74c843971
+
 # ---------------------------------------------------------------------------
 # Stage 1: dev — Go + GDAL dev headers + tooling
 # ---------------------------------------------------------------------------
-FROM ghcr.io/osgeo/gdal:ubuntu-small-${GDAL_VERSION} AS dev
+FROM ghcr.io/osgeo/gdal@${GDAL_BASE_DIGEST} AS dev
 
 ARG GO_VERSION
 ARG GOLANGCI_LINT_VERSION
@@ -118,7 +131,7 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 # Stage 3: runtime — minimal image for shipping
 # ---------------------------------------------------------------------------
-FROM ghcr.io/osgeo/gdal:ubuntu-small-${GDAL_VERSION} AS runtime
+FROM ghcr.io/osgeo/gdal@${GDAL_BASE_DIGEST} AS runtime
 
 # No apt-install: the OSGeo base already provides ca-certificates +
 # libpq5 (lib/pq's runtime dep). Skipping apt makes the runtime stage

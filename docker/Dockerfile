@@ -11,7 +11,17 @@
 # client's integration suite has those; gismanager does not).
 
 ARG TOMCAT_TAG=9-jdk17-temurin
-FROM tomcat:${TOMCAT_TAG}
+
+# Base image is digest-pinned to immunize the test stack from upstream
+# re-tags. Tag-equivalent at pin time: tomcat:9-jdk17-temurin (multi-arch
+# manifest list).
+#
+# To re-pin (when bumping TOMCAT_TAG or pulling in upstream patches):
+#   docker buildx imagetools inspect tomcat:<new-tag>
+# captures the manifest list digest.
+ARG TOMCAT_BASE_DIGEST=sha256:57536fa59652ece9df8d744749fa5a424136388f2eb934ddc8741918a51afd56
+
+FROM tomcat@${TOMCAT_BASE_DIGEST}
 
 LABEL maintainer="Hesham Karm<hishamwaleedkaram@gmail.com>"
 

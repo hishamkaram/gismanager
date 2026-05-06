@@ -111,6 +111,19 @@ jobs:
         run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
       - name: Coverage summary
         run: go tool cover -func=coverage.out | tail -n 1
+      - name: Coverage gate (>= 65%)
+        # Baseline at item #6 ship (May 2026): 69.3%. Threshold set at
+        # 65% gives ~4pp headroom for legitimate refactors that
+        # incidentally drop coverage; raise this whenever real coverage
+        # increases meaningfully (track in CHANGELOG when bumped).
+        run: |
+          set -ex
+          pct=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
+          echo "Total coverage: ${pct}%"
+          awk -v p="$pct" -v t=65 'BEGIN { exit (p+0 < t) ? 1 : 0 }' || {
+            echo "::error::Total coverage ${pct}% is below threshold 65%."
+            exit 1
+          }
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
