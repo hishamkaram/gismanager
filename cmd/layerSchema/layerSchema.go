@@ -12,20 +12,39 @@ import (
 	"os"
 
 	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/cmd/internal/cli"
 )
 
-func main() {
-	if err := run(context.Background()); err != nil {
+func main() { os.Exit(realMain()) }
+
+// realMain is the testable entry point; see the matching helper in
+// cmd/gismanager/gismanager.go for rationale.
+func realMain() int {
+	ctx, cancel := cli.SignalContext(context.Background())
+	defer cancel()
+	if err := run(ctx, os.Args[1:]); err != nil {
+		if errors.Is(err, cli.ErrVersionRequested) {
+			return 0
+		}
 		slog.Error("layerSchema", "err", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
-func run(ctx context.Context) error {
-	configFile := flag.String("config", "", "Config File")
-	flag.Parse()
-	if *configFile == "" {
-		return errors.New("config: --config parameter is required")
+func run(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("layerSchema", flag.ContinueOnError)
+	configFile := fs.String("config", "", "Config File")
+	versionFlag := fs.Bool("version", false, "print build version and exit")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *versionFlag {
+		cli.PrintVersion(os.Stdout, "layerSchema")
+		return cli.ErrVersionRequested
+	}
+	if err := cli.RequireFlag("layerSchema", "config", *configFile); err != nil {
+		return err
 	}
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		return errors.New("config: file does not exist")

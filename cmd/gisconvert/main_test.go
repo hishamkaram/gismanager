@@ -84,20 +84,20 @@ func TestRasterCreationOptions_AccumulatesAcrossSet(t *testing.T) {
 
 func TestRun_RejectsMissingArgs(t *testing.T) {
 	t.Run("no mode", func(t *testing.T) {
-		err := run([]string{"-src", "in.shp", "-dst", "out.gpkg"})
+		err := run(t.Context(), []string{"-src", "in.shp", "-dst", "out.gpkg"})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "-mode")
 	})
 	t.Run("no src", func(t *testing.T) {
-		err := run([]string{"-mode", "vector", "-dst", "out.gpkg"})
+		err := run(t.Context(), []string{"-mode", "vector", "-dst", "out.gpkg"})
 		assert.Error(t, err)
 	})
 	t.Run("no dst", func(t *testing.T) {
-		err := run([]string{"-mode", "vector", "-src", "in.shp"})
+		err := run(t.Context(), []string{"-mode", "vector", "-src", "in.shp"})
 		assert.Error(t, err)
 	})
 	t.Run("unknown mode", func(t *testing.T) {
-		err := run([]string{"-mode", "satellite", "-src", "in", "-dst", "out"})
+		err := run(t.Context(), []string{"-mode", "satellite", "-src", "in", "-dst", "out"})
 		assert.Error(t, err)
 		assert.True(t, strings.Contains(err.Error(), "-mode must be"))
 	})
@@ -105,7 +105,7 @@ func TestRun_RejectsMissingArgs(t *testing.T) {
 
 func TestRun_RejectsRasterReprojectWithoutBothSRS(t *testing.T) {
 	// Only -t-srs supplied; gisconvert requires both -s-srs and -t-srs.
-	err := run([]string{
+	err := run(t.Context(), []string{
 		"-mode", "raster",
 		"-src", "in.tif",
 		"-dst", "out.tif",

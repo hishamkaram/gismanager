@@ -30,23 +30,35 @@ import (
 	"strings"
 
 	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/cmd/internal/cli"
 )
 
-func main() {
-	if err := run(os.Args[1:]); err != nil {
+func main() { os.Exit(realMain()) }
+
+// realMain is the testable entry point; see the matching helper in
+// cmd/gismanager/gismanager.go for rationale.
+func realMain() int {
+	ctx, cancel := cli.SignalContext(context.Background())
+	defer cancel()
+	if err := run(ctx, os.Args[1:]); err != nil {
+		if errors.Is(err, cli.ErrVersionRequested) {
+			return 0
+		}
 		slog.Error("gisconvert", "err", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // run is the entry point separated from main() so it can be tested
-// directly with arbitrary argument slices.
-func run(args []string) error {
+// directly with arbitrary argument slices and a controllable context.
+func run(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("gisconvert", flag.ContinueOnError)
 	mode := fs.String("mode", "", "conversion mode: 'vector' or 'raster'")
 	src := fs.String("src", "", "source path (file or /vsi*/-prefixed URL)")
 	dst := fs.String("dst", "", "destination path (file or /vsi*/-prefixed URL)")
 	format := fs.String("format", "", "output driver name (GPKG, GeoJSON, GTiff, COG, PNG, ...). When empty, GDAL infers from -dst extension.")
+	versionFlag := fs.Bool("version", false, "print build version and exit")
 
 	// Vector flags.
 	tSRS := fs.String("t-srs", "", "target SRS (e.g. EPSG:3857). Required for 'raster' mode reproject; optional for 'vector' mode reproject.")
@@ -73,11 +85,14 @@ func run(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if *versionFlag {
+		cli.PrintVersion(os.Stdout, "gisconvert")
+		return cli.ErrVersionRequested
+	}
 	if *mode == "" || *src == "" || *dst == "" {
 		return errors.New("gisconvert: -mode, -src, and -dst are all required")
 	}
 
-	ctx := context.Background()
 	switch *mode {
 	case "vector":
 		return runVector(ctx, *src, *dst, *format, *sSRS, *tSRS, *bbox,
