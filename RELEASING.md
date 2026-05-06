@@ -103,6 +103,52 @@ After the workflow finishes:
 Open a tracking issue or PR for next-cycle items if relevant. The next
 `[Unreleased]` block accumulates entries until the next cut.
 
+## Maintenance branches
+
+When master diverges from a stable release line — e.g. master is leading
+edge of v2 work but v1.x users still need security/CVE patches — the
+project keeps a `release/vX.x` long-lived branch (one per major-version
+line) for back-porting fixes.
+
+### Current state
+
+- **`master`** — leading edge. As of the v2 restructure (see
+  `~/.claude/plans/how-can-we-improve-steady-emerson.md`), master is the
+  v2 development line. v1 users should NOT pull from master.
+- **`release/v1.x`** — v1.x patch line, branched from `v1.4.1`. Any v1
+  patch release (`v1.4.2`, `v1.5.0`, etc.) is cut from this branch.
+
+### CI coverage on maintenance branches
+
+`.github/workflows/{ci,integration,security}.yml` trigger on both
+`master` and `release/v*` for `push` and `pull_request` events. PRs
+opened against `release/v1.x` get the full matrix (lint + unit +
+integration on GeoServer 2.27 LTS + 2.28 stable + Trivy + CodeQL +
+govulncheck) just like master PRs.
+
+### Cutting a v1 patch
+
+1. Branch off `release/v1.x`: `git checkout release/v1.x && git pull`.
+2. Open a feature branch off that and PR back to `release/v1.x`.
+3. After CI green + merge, update `CHANGELOG.md` `[Unreleased]`
+   on the maintenance branch into a `[1.4.2]` (or whatever) stanza,
+   commit, push.
+4. Tag `v1.4.2` from the `release/v1.x` HEAD: `git tag -s v1.4.2 …`
+   (or `-a` if no GPG configured), `git push origin v1.4.2`. The
+   release.yml workflow runs from the tag's commit (not master) so
+   the artifact build uses the maintenance-branch source.
+5. Smoke test (same as master release).
+
+### Forward-porting fixes
+
+For fixes that must land on BOTH master and `release/v1.x`, prefer:
+- Land on `release/v1.x` first, then cherry-pick to master.
+- Or land on master first, then cherry-pick to `release/v1.x`.
+
+The cherry-pick direction depends on how invasive the fix is on master
+vs. the maintenance branch. Either way, document the cherry-pick
+relationship in the second commit's message (`cherry-picked from <sha>`).
+
 ## Yanking a bad release
 
 If a release goes out broken:
