@@ -1,0 +1,188 @@
+name: Release
+
+# This workflow runs ONLY on tag push (v*.*.*), never on master or PRs.
+# Per CLAUDE.md, tagging is an explicit user action — Claude / CI never
+# runs `git tag` autonomously. The cut steps for a maintainer live in
+# RELEASING.md at the repo root.
+#
+# Outputs per release:
+#   - Multi-arch Docker images (linux/amd64 + linux/arm64) at
+#     ghcr.io/<owner>/<repo>:<vX.Y.Z> and :latest, cosign-signed keyless
+#     via the GitHub Actions OIDC identity.
+#   - Linux amd64 raw binaries (gismanager, layerSchema, gisconvert),
+#     each with version metadata baked in via -ldflags, packaged as a
+#     single tar.gz alongside SHA-256 checksums and a cosign signature
+#     of those checksums.
+#   - SBOM (SPDX-JSON, syft-generated) covering the binary archive.
+#   - GitHub Release whose body is extracted from CHANGELOG.md's
+#     [Unreleased] stanza — the maintainer is expected to have moved
+#     the [Unreleased] entries into the new [<version>] stanza in a
+#     pre-tag commit, leaving [Unreleased] empty for the next cycle.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write       # create the GitHub Release + upload assets
+  packages: write       # push to ghcr.io
+  id-token: write       # cosign keyless via OIDC
+  attestations: write   # provenance attestations on the image
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so `git describe` resolves
+
+      - name: Set version env
+        run: |
+          set -ex
+          echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      # ---------- Docker image (multi-arch) -------------------------------
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute lowercase image ref
+        id: lc
+        run: echo "image=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push image (linux/amd64,linux/arm64)
+        id: build_image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.lc.outputs.image }}:${{ env.VERSION }}
+            ${{ steps.lc.outputs.image }}:latest
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.COMMIT }}
+            DATE=${{ env.DATE }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Cosign sign image (keyless via OIDC)
+        run: |
+          cosign sign --yes \
+            "${{ steps.lc.outputs.image }}@${{ steps.build_image.outputs.digest }}"
+
+      # ---------- Raw amd64 binaries --------------------------------------
+      #
+      # We rebuild the binaries on the host runner (with a static GDAL
+      # apt-installed) rather than copying out of the multi-arch image,
+      # because docker buildx --platform=linux/amd64,linux/arm64 stores
+      # both arches in a manifest list and `docker create` to extract
+      # binaries works on a single-arch image only. Building once more
+      # for amd64 with the same Dockerfile build stage is the simplest
+      # path and re-uses the already-warm Buildx cache.
+
+      - name: Build amd64 binaries (extract from single-arch build)
+        run: |
+          set -ex
+          mkdir -p dist
+          docker buildx build \
+            --platform linux/amd64 \
+            --target build \
+            --build-arg "VERSION=${VERSION}" \
+            --build-arg "COMMIT=${COMMIT}" \
+            --build-arg "DATE=${DATE}" \
+            --output type=local,dest=./dist-build \
+            .
+          # The build stage writes binaries to /out; --output=local copies
+          # the entire image fs, so we pull the three binaries from /out.
+          for bin in gismanager layerSchema gisconvert; do
+            cp "dist-build/out/${bin}" "dist/${bin}"
+            chmod +x "dist/${bin}"
+          done
+          ls -la dist/
+
+      - name: Package binary tarball + checksums
+        run: |
+          set -ex
+          cd dist
+          tar czf "../gismanager_${VERSION}_linux_amd64.tar.gz" \
+            gismanager layerSchema gisconvert
+          cd ..
+          sha256sum "gismanager_${VERSION}_linux_amd64.tar.gz" > checksums.txt
+          cat checksums.txt
+
+      - name: Generate SBOM (syft, SPDX-JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          path: dist/
+          format: spdx-json
+          output-file: gismanager_${{ env.VERSION }}_sbom.spdx.json
+
+      - name: Cosign sign-blob the checksums file (keyless via OIDC)
+        run: |
+          cosign sign-blob --yes \
+            --output-signature checksums.txt.sig \
+            --output-certificate checksums.txt.pem \
+            checksums.txt
+
+      # ---------- GitHub Release ------------------------------------------
+
+      - name: Extract release notes from CHANGELOG [Unreleased] / current version stanza
+        id: notes
+        run: |
+          # The maintainer is expected to have moved [Unreleased] entries
+          # into the new [<version>] stanza in a pre-tag commit. We try the
+          # version stanza first; if empty, fall back to [Unreleased].
+          set -ex
+          v="${VERSION#v}"
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" {flag=1; next}
+            flag && /^## \[/ {flag=0}
+            flag {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            awk '/^## \[Unreleased\]/{flag=1; next} /^## \[/{flag=0} flag' \
+              CHANGELOG.md > release-notes.md
+          fi
+          if [ ! -s release-notes.md ]; then
+            echo "Release ${VERSION}." > release-notes.md
+          fi
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+          files: |
+            gismanager_${{ env.VERSION }}_linux_amd64.tar.gz
+            checksums.txt
+            checksums.txt.sig
+            checksums.txt.pem
+            gismanager_${{ env.VERSION }}_sbom.spdx.json
