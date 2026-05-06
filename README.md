@@ -197,6 +197,21 @@ case errors.Is(err, gismanager.ErrUnsupportedFormat):
 
 Sentinels: `ErrConfigInvalid`, `ErrUnsupportedFormat`, `ErrInvalidLayer`, `ErrInvalidDatasource`, `ErrPostGISConnect`, `ErrGeoServerPublish`, `ErrNoSourcesFound`. Never compare error strings — `errors.Is(err, sentinel)` is the only correct test.
 
+## Observability
+
+The library emits structured logs via `*slog.Logger` throughout the publish
+pipeline and the conversion subsystem. Pass a custom logger via
+`WithLogger` to control formatting, filtering, and routing.
+
+For production deploys with trace correlation (every library log gets the
+active span's `trace_id` / `span_id`), use the
+[OpenTelemetry slog bridge](https://pkg.go.dev/go.opentelemetry.io/contrib/bridges/otelslog).
+A runnable end-to-end example lives at
+[`examples/otel_pipeline/`](./examples/otel_pipeline) (its own Go submodule
+so the OTel SDK doesn't bloat gismanager's runtime dep surface). See
+[`docs/observability.md`](./docs/observability.md) for the architectural
+pattern and a Kubernetes deployment recipe.
+
 ## Configuration
 
 YAML schema (the same struct gets used by `gismanager.FromConfig`):
