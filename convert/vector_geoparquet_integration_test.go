@@ -17,8 +17,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hishamkaram/gismanager"
 	"github.com/hishamkaram/gismanager/convert"
+	"github.com/hishamkaram/gismanager/publish"
 )
 
 // TestConvertVector_GeoParquetRoundTrip_Integration round-trips a
@@ -32,7 +32,7 @@ func TestConvertVector_GeoParquetRoundTrip_Integration(t *testing.T) {
 	parquetPath := "/vsimem/test_geoparquet_roundtrip.parquet"
 
 	// 1. Source-side baseline: count features in the GeoJSON.
-	mgr, err := gismanager.New()
+	mgr, err := publish.New()
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestConvertVector_GeoParquetRoundTrip_Integration(t *testing.T) {
 	t.Logf("GeoParquet round-trip ok: %d features", dstCount)
 }
 
-// parquetDriverName mirrors the unexported [gismanager.parquetDriver]
+// parquetDriverName mirrors the unexported [publish.parquetDriver]
 // constant without exposing it. We can't reach the unexported name from
 // this external `convert_test` package, so we duplicate the string
 // here. If a future PR exports the driver-name constants (a v2 change),

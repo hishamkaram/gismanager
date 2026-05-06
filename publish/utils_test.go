@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"os"
@@ -18,33 +18,33 @@ func TestIsSupported(t *testing.T) {
 }
 func TestZippedShapeFile(t *testing.T) {
 	newDir, _ := os.MkdirTemp("", "zipped_shapeFile")
-	unzipErr := zippedShapeFile("./testdata/faults.zip", newDir)
+	unzipErr := zippedShapeFile("../testdata/faults.zip", newDir)
 	assert.Nil(t, unzipErr)
-	dummyErr := zippedShapeFile("./testdata/faults_ss.zip", newDir)
+	dummyErr := zippedShapeFile("../testdata/faults_ss.zip", newDir)
 	assert.NotNil(t, dummyErr)
-	dirErr := zippedShapeFile("./testdata/", newDir)
+	dirErr := zippedShapeFile("../testdata/", newDir)
 	assert.NotNil(t, dirErr)
 }
 func TestPreprocessFile(t *testing.T) {
-	finalPath, preProcessErr := preprocessFile("./testdata/faults.zip", "", nil)
+	finalPath, preProcessErr := preprocessFile("../testdata/faults.zip", "", nil)
 	assert.NotNil(t, finalPath)
 	assert.NotEqual(t, "", finalPath)
 	assert.Nil(t, preProcessErr)
-	errFinalPath, err := preprocessFile("./testdata/dummy.zip", "", nil)
+	errFinalPath, err := preprocessFile("../testdata/dummy.zip", "", nil)
 	assert.Equal(t, "", errFinalPath)
 	assert.NotNil(t, err)
-	emptyFinalPath, emptyErr := preprocessFile("./testdata/faults_empty.zip", "", nil)
+	emptyFinalPath, emptyErr := preprocessFile("../testdata/faults_empty.zip", "", nil)
 	assert.Equal(t, "", emptyFinalPath)
 	assert.NotNil(t, emptyErr)
 }
 func TestGetGISFiles(t *testing.T) {
-	files, err := GetGISFiles("./testdata")
+	files, err := GetGISFiles("../testdata")
 	// 5 supported files post-PR 5 of v1.1: faults.zip, neighborhood_names_gis.geojson,
 	// nested/nyc_wi-fi_hotspot_locations.geojson, sample.gpkg, sample.kml.
 	// faults_empty.zip yields no GIS files so doesn't count.
 	assert.Equal(t, 5, len(files))
 	assert.Nil(t, err)
-	noDir, NoDirerr := GetGISFiles("./testdata/sample.gpkg")
+	noDir, NoDirerr := GetGISFiles("../testdata/sample.gpkg")
 	assert.Equal(t, 1, len(noDir))
 	assert.Nil(t, NoDirerr)
 	dummyFiles, dummyFileserr := GetGISFiles("./testdata_dummy/sample.gpkg")

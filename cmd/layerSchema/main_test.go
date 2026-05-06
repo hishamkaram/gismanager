@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/publish"
 )
 
 // TestLayerEntryJSON_Shape locks in the on-the-wire shape of the
@@ -16,7 +16,7 @@ func TestLayerEntryJSON_Shape(t *testing.T) {
 	entry := layerEntry{
 		Path: "./testdata/sample.gpkg",
 		Name: "neighborhoods",
-		Fields: []*gismanager.LayerField{
+		Fields: []*publish.LayerField{
 			{Name: "geom", Type: "POLYGON"},
 			{Name: "id", Type: "Integer"},
 			{Name: "name", Type: "String"},

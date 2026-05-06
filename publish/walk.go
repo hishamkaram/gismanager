@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -7,6 +7,9 @@ import (
 	"sync"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
 // defaultPublishConcurrency caps how many GeoServer feature-type
@@ -24,7 +27,7 @@ import (
 // functional option in v1.5+ if there's demand to tune.
 const defaultPublishConcurrency = 8
 
-// WalkItem is one yielded element of [(*ManagerConfig).Walk]: a
+// WalkItem is one yielded element of [(*Manager).Walk]: a
 // (path, layer) pair the caller can consume.
 //
 // Convention: when the iterator's second yield value is a non-nil error,
@@ -37,10 +40,10 @@ type WalkItem struct {
 	Path string
 
 	// Layer is the wrapped GDAL layer, with the manager's logger
-	// stamped via [(*ManagerConfig).NewLayer]. Use it directly with
+	// stamped via [(*Manager).NewLayer]. Use it directly with
 	// helpers like [LayerToPostgis] / [PublishGeoserverLayer], or read
 	// its embedded *gdal.Layer for OGR-level operations.
-	Layer *GdalLayer
+	Layer *Layer
 }
 
 // Walk returns an iterator over every layer of every supported GIS file
@@ -53,7 +56,7 @@ type WalkItem struct {
 // is therefore bounded to one file's worth of OGR state at a time, even
 // for very large source directories.
 //
-// Per-file errors do NOT abort the iterator. If [(*ManagerConfig).OpenSource]
+// Per-file errors do NOT abort the iterator. If [(*Manager).OpenSource]
 // fails for a path, Walk yields a zero [WalkItem] paired with the wrapped
 // error and continues to the next file. Callers can:
 //
@@ -67,10 +70,10 @@ type WalkItem struct {
 //
 // `break`-ing out of the for-range loop runs the deferred Destroy on the
 // currently-open source, so early termination doesn't leak.
-func (manager *ManagerConfig) Walk(ctx context.Context) iter.Seq2[WalkItem, error] {
+func (manager *Manager) Walk(ctx context.Context) iter.Seq2[WalkItem, error] {
 	logger := manager.logger
 	if logger == nil {
-		logger = GetLogger()
+		logger = slogx.Default()
 	}
 	return func(yield func(WalkItem, error) bool) {
 		files, err := getGISFiles(manager.Source.Path, logger)
@@ -106,7 +109,7 @@ func (manager *ManagerConfig) Walk(ctx context.Context) iter.Seq2[WalkItem, erro
 // each one via the iterator's yield function. Returns true when the
 // caller signaled stop (yield returned false), letting the outer loop
 // release the source and exit.
-func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSource, path string, yield func(WalkItem, error) bool) bool {
+func walkLayers(manager *Manager, ctx context.Context, source *gdal.DataSource, path string, yield func(WalkItem, error) bool) bool {
 	count := source.LayerCount()
 	for i := 0; i < count; i++ {
 		if err := ctx.Err(); err != nil {
@@ -146,7 +149,7 @@ func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSo
 //
 // Error semantics (since v1.4):
 //
-//   - Setup failures abort the operation. If [(*ManagerConfig).OpenSource]
+//   - Setup failures abort the operation. If [(*Manager).OpenSource]
 //     can't open the PostGIS datastore, PublishAll returns the wrapped
 //     error directly without attempting any layer.
 //   - Per-layer failures (walk errors, PostGIS load errors, GeoServer
@@ -157,7 +160,7 @@ func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSo
 //     per-layer error, or nil if every layer succeeded.
 //
 // Callers can branch on the aggregated result with
-// `errors.Is(err, ErrGeoServerPublish)` / `errors.Is(err, ErrPostGISConnect)`
+// `errors.Is(err, errs.ErrGeoServerPublish)` / `errors.Is(err, errs.ErrPostGISConnect)`
 // — the joined error walks through every collected failure, so any
 // match in the chain returns true. To enumerate per-layer failures
 // individually, type-assert via `errors.As(err, &gerr)` repeatedly or
@@ -178,10 +181,10 @@ func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSo
 // will now see those failures surface; that previous behavior was an
 // acknowledged silent-failure mode (see the v1.3 doc comment) and the
 // aggregated form is the documented path forward.
-func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
+func (manager *Manager) PublishAll(ctx context.Context) error {
 	logger := manager.logger
 	if logger == nil {
-		logger = GetLogger()
+		logger = slogx.Default()
 	}
 	target, err := manager.OpenSource(ctx, manager.Datastore.BuildConnectionString(), 1)
 	if err != nil {
@@ -204,7 +207,7 @@ func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
 	// going through PublishAll.)
 	catalog, catErr := manager.GetGeoserverCatalog()
 	if catErr != nil {
-		return newGISError("PublishAll", "", ErrGeoServerPublish, catErr)
+		return errs.NewGISError("PublishAll", "", errs.ErrGeoServerPublish, catErr)
 	}
 	if wsErr := ensureWorkspace(ctx, catalog, manager.Geoserver.WorkspaceName); wsErr != nil {
 		return wsErr
@@ -250,7 +253,7 @@ func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
 		// than spawning unbounded goroutines.
 		sem <- struct{}{}
 		wg.Add(1)
-		go func(item WalkItem, newLayer *GdalLayer) {
+		go func(item WalkItem, newLayer *Layer) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			if pubErr := manager.PublishGeoserverLayer(ctx, newLayer); pubErr != nil {

@@ -11,8 +11,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/hishamkaram/gismanager"
 	"github.com/hishamkaram/gismanager/cmd/internal/cli"
+	"github.com/hishamkaram/gismanager/publish"
 )
 
 func main() { os.Exit(realMain()) }
@@ -52,7 +52,7 @@ func run(ctx context.Context, args []string) error {
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		return errors.New("config: file does not exist")
 	}
-	manager, err := gismanager.FromConfig(*configFile)
+	manager, err := publish.FromConfig(*configFile)
 	if err != nil {
 		return err
 	}

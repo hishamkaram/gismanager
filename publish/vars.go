@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import "regexp"
 

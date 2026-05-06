@@ -11,5 +11,5 @@ datastore:
   password: golang
   name: gismanager_data
 source:
-  path: ./testdata
+  path: ../testdata
 </error>

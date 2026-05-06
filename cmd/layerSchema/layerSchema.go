@@ -19,23 +19,23 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/hishamkaram/gismanager"
 	"github.com/hishamkaram/gismanager/cmd/internal/cli"
+	"github.com/hishamkaram/gismanager/publish"
 )
 
 // layerEntry is the JSON shape for one yielded layer when -json is set.
 // Field tags are explicit so the JSON keys stay stable even if the
 // underlying struct fields are renamed in a future refactor.
 type layerEntry struct {
-	Path   string                   `json:"path"`
-	Name   string                   `json:"name"`
-	Fields []*gismanager.LayerField `json:"fields"`
+	Path   string                `json:"path"`
+	Name   string                `json:"name"`
+	Fields []*publish.LayerField `json:"fields"`
 }
 
 func main() { os.Exit(realMain()) }
 
 // realMain is the testable entry point; see the matching helper in
-// cmd/gismanager/gismanager.go for rationale.
+// cmd/gismanager/publish.go for rationale.
 func realMain() int {
 	ctx, cancel := cli.SignalContext(context.Background())
 	defer cancel()
@@ -67,7 +67,7 @@ func run(ctx context.Context, args []string) error {
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		return errors.New("config: file does not exist")
 	}
-	manager, err := gismanager.FromConfig(*configFile)
+	manager, err := publish.FromConfig(*configFile)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func run(ctx context.Context, args []string) error {
 // runText emits the human-readable per-layer block format. Walk errors
 // are logged to stderr via slog (the configured logger) but don't abort
 // the loop — same behavior as pre-1.4.
-func runText(ctx context.Context, manager *gismanager.ManagerConfig, out *os.File) error {
+func runText(ctx context.Context, manager *publish.Manager, out *os.File) error {
 	for item, walkErr := range manager.Walk(ctx) {
 		if walkErr != nil {
 			slog.Error("walk", "err", walkErr)
@@ -109,7 +109,7 @@ func runText(ctx context.Context, manager *gismanager.ManagerConfig, out *os.Fil
 // `python -m json.tool` if a human is reading it. Compact output is
 // the right shell-pipeline default: smaller, faster to parse, and a
 // drop-in for tooling that reads stdout.
-func runJSON(ctx context.Context, manager *gismanager.ManagerConfig, out *os.File) error {
+func runJSON(ctx context.Context, manager *publish.Manager, out *os.File) error {
 	entries := []layerEntry{}
 	for item, walkErr := range manager.Walk(ctx) {
 		if walkErr != nil {

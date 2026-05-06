@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 	"github.com/hishamkaram/gismanager/internal/zipx"
 
 	// PostgreSQL driver registered via blank import for database/sql.
@@ -17,26 +19,26 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// FromConfig loads a ManagerConfig from a YAML file at the given path.
+// FromConfig loads a Manager from a YAML file at the given path.
 //
-// Returns errors wrapping [ErrConfigInvalid]; recover the underlying
+// Returns errors wrapping [errs.ErrConfigInvalid]; recover the underlying
 // os/yaml error via [errors.As].
 //
 // Programmatic callers (no YAML file) should prefer [New] with [Option]
 // helpers like [WithGeoserver] / [WithDatastore] / [WithSource] /
 // [WithLogger]. FromConfig now delegates to New after the YAML decode.
-func FromConfig(configFile string) (*ManagerConfig, error) {
-	logger := GetLogger()
+func FromConfig(configFile string) (*Manager, error) {
+	logger := slogx.Default()
 	absPath, _ := filepath.Abs(configFile)
 	yamlFile, readErr := os.ReadFile(absPath) //nolint:gosec // G304: configFile is the operator-supplied --config path; reading it is the documented entry point.
 	if readErr != nil {
 		logger.Error("read yaml", "path", absPath, "err", readErr)
-		return nil, newGISError("FromConfig", absPath, ErrConfigInvalid, readErr)
+		return nil, errs.NewGISError("FromConfig", absPath, errs.ErrConfigInvalid, readErr)
 	}
-	var decoded ManagerConfig
+	var decoded Manager
 	if unmarshalErr := yaml.Unmarshal(yamlFile, &decoded); unmarshalErr != nil {
 		logger.Error("unmarshal yaml", "path", absPath, "err", unmarshalErr)
-		return nil, newGISError("FromConfig", absPath, ErrConfigInvalid, unmarshalErr)
+		return nil, errs.NewGISError("FromConfig", absPath, errs.ErrConfigInvalid, unmarshalErr)
 	}
 	// Apply ${VAR} substitution to operator-supplied string fields
 	// before validation so a YAML referencing $PG_PASSWORD doesn't
@@ -71,12 +73,12 @@ func isSupported(ext string) bool {
 // path it finds (shapefile, GeoJSON, GeoPackage, KML, plus zipped shapefile
 // bundles which are auto-extracted to a temp directory).
 //
-// Diagnostic logs use the project default logger from [GetLogger]. Callers
+// Diagnostic logs use the project default logger from [slogx.Default]. Callers
 // that want to thread a custom logger should construct a manager via [New]
 // + [WithLogger] and use the manager-driven walk path (added by a
 // follow-up PR); the default logger here is preserved for back-compat.
 func GetGISFiles(root string) ([]string, error) {
-	return getGISFiles(root, GetLogger())
+	return getGISFiles(root, slogx.Default())
 }
 
 // getGISFiles is the logger-aware implementation. Internal callers
@@ -158,7 +160,7 @@ func zippedShapeFile(zippedPath string, destPath string) (err error) {
 
 func preprocessFile(filePath string, tempPath string, logger *slog.Logger) (finalPath string, err error) {
 	if logger == nil {
-		logger = GetLogger()
+		logger = slogx.Default()
 	}
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {

@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -7,62 +7,64 @@ import (
 
 	"github.com/lukeroth/gdal"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestFromConfig(t *testing.T) {
-	manager, confErr := FromConfig("./testdata/test_config.yml")
+	manager, confErr := FromConfig("../testdata/test_config.yml")
 	assert.Nil(t, confErr)
 	assert.NotNil(t, manager)
-	expected := ManagerConfig{
+	expected := Manager{
 		Geoserver: GeoserverConfig{WorkspaceName: "golang", Username: "admin", Password: "geoserver", ServerURL: "http://localhost:8080/geoserver"},
 		Datastore: DatastoreConfig{Host: "localhost", Port: 5432, DBName: "gis", DBUser: "golang", DBPass: "golang", Name: "gismanager_data"},
-		Source:    SourceConfig{Path: "./testdata"},
+		Source:    SourceConfig{Path: "../testdata"},
 		logger:    manager.logger,
 	}
 	assert.Equal(t, expected.Geoserver, manager.Geoserver)
 	assert.Equal(t, expected.Source, manager.Source)
 	assert.Equal(t, expected.logger, manager.logger)
-	nilManager, nilConfErr := FromConfig("./testdata/test_configs.yml")
+	nilManager, nilConfErr := FromConfig("../testdata/test_configs.yml")
 	assert.NotNil(t, nilConfErr)
 	assert.Nil(t, nilManager)
-	errManager, errConfErr := FromConfig("./testdata/test_config_err.yml")
+	errManager, errConfErr := FromConfig("../testdata/test_config_err.yml")
 	assert.NotNil(t, errConfErr)
 	assert.Nil(t, errManager)
 }
 func TestOpenSource(t *testing.T) {
-	manager, _ := FromConfig("./testdata/test_config.yml")
+	manager, _ := FromConfig("../testdata/test_config.yml")
 	ctx := context.Background()
 
-	datasource, err := manager.OpenSource(ctx, "./testdata/sample.gpkg", 0)
+	datasource, err := manager.OpenSource(ctx, "../testdata/sample.gpkg", 0)
 	assert.Nil(t, err)
 	assert.NotNil(t, datasource)
 
-	nilDatasource, formatErr := manager.OpenSource(ctx, "./testdata/sample_dummy.xml", 0)
+	nilDatasource, formatErr := manager.OpenSource(ctx, "../testdata/sample_dummy.xml", 0)
 	assert.Nil(t, nilDatasource)
-	assert.True(t, errors.Is(formatErr, ErrUnsupportedFormat),
-		"expected ErrUnsupportedFormat, got %v", formatErr)
+	assert.True(t, errors.Is(formatErr, errs.ErrUnsupportedFormat),
+		"expected errs.ErrUnsupportedFormat, got %v", formatErr)
 }
 func TestGetGeoserverCatalog(t *testing.T) {
-	manager, _ := FromConfig("./testdata/test_config.yml")
+	manager, _ := FromConfig("../testdata/test_config.yml")
 	catalog, err := manager.GetGeoserverCatalog()
 	assert.Nil(t, err)
 	assert.NotNil(t, catalog)
 }
 func TestGetDriver(t *testing.T) {
-	manager, _ := FromConfig("./testdata/test_config.yml")
-	gpkgDriver, gpkgErr := manager.GetDriver("./testdata/sample.gpkg")
+	manager, _ := FromConfig("../testdata/test_config.yml")
+	gpkgDriver, gpkgErr := manager.GetDriver("../testdata/sample.gpkg")
 	assert.Nil(t, gpkgErr)
 	assert.NotNil(t, gpkgDriver)
 	assert.Equal(t, gdal.OGRDriverByName(geopackageDriver), gpkgDriver)
-	jsonDriver, jsonErr := manager.GetDriver("./testdata/neighborhood_names_gis.geojson")
+	jsonDriver, jsonErr := manager.GetDriver("../testdata/neighborhood_names_gis.geojson")
 	assert.Nil(t, jsonErr)
 	assert.NotNil(t, jsonDriver)
 	assert.Equal(t, gdal.OGRDriverByName(geoJSONDriver), jsonDriver)
-	zipDriver, zipErr := manager.GetDriver("./testdata/shapeFile.zip")
+	zipDriver, zipErr := manager.GetDriver("../testdata/shapeFile.zip")
 	assert.Nil(t, zipErr)
 	assert.NotNil(t, zipDriver)
 	assert.Equal(t, gdal.OGRDriverByName(shapeFileDriver), zipDriver)
-	KMLDriver, KMLErr := manager.GetDriver("./testdata/layer.kml")
+	KMLDriver, KMLErr := manager.GetDriver("../testdata/layer.kml")
 	assert.Nil(t, KMLErr)
 	assert.NotNil(t, KMLDriver)
 	assert.Equal(t, gdal.OGRDriverByName(kmlDriver), KMLDriver)
@@ -70,7 +72,7 @@ func TestGetDriver(t *testing.T) {
 	assert.Nil(t, pgErr)
 	assert.NotNil(t, pgDriver)
 	assert.Equal(t, gdal.OGRDriverByName(postgreSQLDriver), pgDriver)
-	tiffDriver, tiffErr := manager.GetDriver("./testdata/layer.tiff")
+	tiffDriver, tiffErr := manager.GetDriver("../testdata/layer.tiff")
 	assert.NotNil(t, tiffErr)
 	assert.Equal(t, gdal.OGRDriver{}, tiffDriver)
 
