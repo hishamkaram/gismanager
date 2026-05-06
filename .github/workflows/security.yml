@@ -1,0 +1,98 @@
+name: Security scans
+
+# Supplements ci.yml's `govulncheck` (which covers Go module vulnerabilities)
+# with Trivy scanning of:
+#
+#   1. The runtime Docker image — finds OS-level CVEs in the libgdal /
+#      Ubuntu base layers that govulncheck doesn't see.
+#   2. The repository filesystem — finds dependency-manifest CVEs and
+#      exposed-secret false-positives early.
+#
+# Findings are uploaded to GitHub's Security tab as SARIF; the workflow
+# does not fail the build on findings (a security-tab notification is
+# the right pressure model for pre-existing upstream CVEs that fix
+# arrives via image rebuild rather than a code change). HIGH and
+# CRITICAL severities only — anything below would just generate noise.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Sundays at 04:23 UTC — outside common deploy windows; offset 1 hour
+    # from integration.yml's Sunday cron so the two don't compete for
+    # the GHA runner pool.
+    - cron: "23 4 * * 0"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  security-events: write   # required to upload SARIF to the Security tab
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  trivy-image:
+    name: Trivy (runtime image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build runtime image (with GHA cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          tags: gismanager:scan
+          load: true
+          # Reuse the integration suite's runtime-image cache scope so
+          # cold runs are fast on shared infra. cache-to mode=max keeps
+          # all intermediate layers warm.
+          cache-from: type=gha,scope=runtime-image
+          cache-to: type=gha,scope=runtime-image,mode=max
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: gismanager:scan
+          format: sarif
+          output: trivy-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload SARIF (image)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+  trivy-fs:
+    name: Trivy (repository fs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: "."
+          format: sarif
+          output: trivy-fs.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload SARIF (fs)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
