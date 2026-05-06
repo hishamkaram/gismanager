@@ -230,6 +230,38 @@ Other supported modes: `aspect`, `TRI` (Terrain Ruggedness Index),
 `TPI` (Topographic Position Index), `roughness`. Color-file format
 documented at https://gdal.org/programs/gdaldem.html#color-relief.
 
+## PMTiles archive *(v1.4+)*
+
+[PMTiles](https://docs.protomaps.com/pmtiles/) is a single-file
+range-readable tile archive — ideal for serverless tile distribution
+from S3, HTTP, or any blob storage that supports HTTP range requests.
+v1.4 added [`ToPMTiles`](../convert_pmtiles.go), a thin wrapper over
+[`protomaps/go-pmtiles`](https://github.com/protomaps/go-pmtiles)
+that converts an existing **MBTiles** archive to PMTiles v3.
+
+Two-stage pipeline starting from a raster source:
+
+```go
+// 1. raster -> MBTiles (via the GDAL MBTiles driver)
+err := gismanager.ConvertRaster(ctx,
+    "/data/scene.tif",
+    "/tmp/scene.mbtiles",
+    gismanager.WithRasterFormat("MBTILES"),
+)
+
+// 2. MBTiles -> PMTiles
+err = gismanager.ToPMTiles(ctx,
+    "/tmp/scene.mbtiles",
+    "/data/scene.pmtiles",
+)
+```
+
+Vector inputs work the same way — produce MBTiles via tippecanoe (or
+any other tool that emits MBTiles), then run `ToPMTiles` to repackage.
+
+**Direct raster → PMTiles** (skipping the intermediate MBTiles) is
+deferred to v1.5; for v1.4 the two-step path is the supported route.
+
 ## Cloud I/O via GDAL Virtual File Systems
 
 All seven conversion entry points pass paths straight through to GDAL,
