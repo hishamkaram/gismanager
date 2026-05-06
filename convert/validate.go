@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"fmt"
@@ -21,9 +21,9 @@ import (
 // (cerr=0, NULL dataset) when the user hands them an unknown driver
 // name — they fail at C-level option parsing, log to stderr, and
 // return without setting cerr. Pre-validating on the Go side surfaces
-// the bad-driver case as a clean ErrConvertFailed before the C call.
+// the bad-driver case as a clean errs.ErrConvertFailed before the C call.
 //
-// Caller wraps the returned error with newGISError(...).
+// Caller wraps the returned error with errs.NewGISError(...).
 func validateGDALDriver(name string) error {
 	if name == "" {
 		return nil

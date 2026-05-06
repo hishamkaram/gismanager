@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"bytes"
@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestToPMTiles_CtxCanceledFastFail(t *testing.T) {
@@ -20,17 +22,17 @@ func TestToPMTiles_CtxCanceledFastFail(t *testing.T) {
 
 func TestToPMTiles_MissingSourceWrapsErr(t *testing.T) {
 	err := ToPMTiles(context.Background(),
-		"./testdata/this-file-definitely-does-not-exist.mbtiles",
+		"../testdata/this-file-definitely-does-not-exist.mbtiles",
 		"/tmp/should-never-be-written.pmtiles")
 	if err == nil {
 		t.Fatal("want error on missing source, got nil")
 	}
-	if !errors.Is(err, ErrConvertFailed) {
-		t.Errorf("errors.Is(err, ErrConvertFailed) = false; want true. err=%v", err)
+	if !errors.Is(err, errs.ErrConvertFailed) {
+		t.Errorf("errors.Is(err, errs.ErrConvertFailed) = false; want true. err=%v", err)
 	}
-	var gerr *GISError
+	var gerr *errs.GISError
 	if !errors.As(err, &gerr) {
-		t.Fatalf("errors.As to *GISError: no match")
+		t.Fatalf("errors.As to *errs.GISError: no match")
 	}
 	if gerr.Op != "ToPMTiles" {
 		t.Errorf("Op = %q; want ToPMTiles", gerr.Op)
@@ -40,7 +42,7 @@ func TestToPMTiles_MissingSourceWrapsErr(t *testing.T) {
 func TestNewPMTilesConfig_DefaultsAndOptions(t *testing.T) {
 	cfg := newPMTilesConfig(nil)
 	if cfg.logger == nil {
-		t.Error("default config: logger should fall back to GetLogger()")
+		t.Error("default config: logger should fall back to slogx.Default()")
 	}
 	if !cfg.deduplicate {
 		t.Error("default config: deduplicate should default to true")
@@ -75,7 +77,7 @@ func TestNewPMTilesConfig_DefaultsAndOptions(t *testing.T) {
 // user-supplied path — useful for triage in batch jobs converting
 // many tilesets in one run.
 func TestToPMTiles_ErrorMessagesIncludePath(t *testing.T) {
-	src := "./testdata/missing-tile-archive-zzz.mbtiles"
+	src := "../testdata/missing-tile-archive-zzz.mbtiles"
 	err := ToPMTiles(context.Background(), src, "/tmp/x.pmtiles")
 	if err == nil {
 		t.Fatal("want error on missing source")

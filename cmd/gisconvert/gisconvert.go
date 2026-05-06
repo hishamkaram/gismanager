@@ -13,9 +13,9 @@
 //	gisconvert -mode raster -src in.tif -dst out.warp.tif \
 //	    -s-srs EPSG:32618 -t-srs EPSG:3857 -resample bilinear
 //
-// gisconvert is a thin shell over [gismanager.ConvertVector],
-// [gismanager.ConvertRaster], [gismanager.ToCOG], and
-// [gismanager.ReprojectRaster]. It uses the stdlib `flag` package — no
+// gisconvert is a thin shell over [convert.ConvertVector],
+// [convert.ConvertRaster], [convert.ToCOG], and
+// [convert.ReprojectRaster]. It uses the stdlib `flag` package — no
 // runtime dependency beyond the gismanager library itself.
 package main
 
@@ -29,8 +29,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hishamkaram/gismanager"
 	"github.com/hishamkaram/gismanager/cmd/internal/cli"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 func main() { os.Exit(realMain()) }
@@ -108,83 +108,83 @@ func run(ctx context.Context, args []string) error {
 func runVector(ctx context.Context, src, dst, format, sSRS, tSRS, bbox,
 	where string, simplify float64, selectFields, layer string, overwrite bool,
 ) error {
-	opts := []gismanager.VectorConvertOption{}
+	opts := []convert.VectorOption{}
 	if format != "" {
-		opts = append(opts, gismanager.WithVectorFormat(format))
+		opts = append(opts, convert.WithVectorFormat(format))
 	}
 	if sSRS != "" {
-		opts = append(opts, gismanager.WithVectorSourceSRS(sSRS))
+		opts = append(opts, convert.WithVectorSourceSRS(sSRS))
 	}
 	if tSRS != "" {
-		opts = append(opts, gismanager.WithVectorTargetSRS(tSRS))
+		opts = append(opts, convert.WithVectorTargetSRS(tSRS))
 	}
 	if bbox != "" {
 		minX, minY, maxX, maxY, err := parseBBox(bbox)
 		if err != nil {
 			return err
 		}
-		opts = append(opts, gismanager.WithVectorBoundingBox(minX, minY, maxX, maxY))
+		opts = append(opts, convert.WithVectorBoundingBox(minX, minY, maxX, maxY))
 	}
 	if where != "" {
-		opts = append(opts, gismanager.WithVectorWhere(where))
+		opts = append(opts, convert.WithVectorWhere(where))
 	}
 	if simplify > 0 {
-		opts = append(opts, gismanager.WithVectorSimplify(simplify))
+		opts = append(opts, convert.WithVectorSimplify(simplify))
 	}
 	if selectFields != "" {
 		fields := strings.Split(selectFields, ",")
-		opts = append(opts, gismanager.WithVectorSelectFields(fields...))
+		opts = append(opts, convert.WithVectorSelectFields(fields...))
 	}
 	if layer != "" {
-		opts = append(opts, gismanager.WithVectorLayerName(layer))
+		opts = append(opts, convert.WithVectorLayerName(layer))
 	}
 	if overwrite {
-		opts = append(opts, gismanager.WithVectorOverwrite())
+		opts = append(opts, convert.WithVectorOverwrite())
 	}
-	return gismanager.ConvertVector(ctx, src, dst, opts...)
+	return convert.ConvertVector(ctx, src, dst, opts...)
 }
 
 func runRaster(ctx context.Context, src, dst, format, sSRS, tSRS, bbox,
 	bands, resample, tr string, cog bool,
 	cutlineDS, cutlineLayer string, creationOpts []string,
 ) error {
-	opts := []gismanager.RasterConvertOption{}
+	opts := []convert.RasterOption{}
 	if format != "" {
-		opts = append(opts, gismanager.WithRasterFormat(format))
+		opts = append(opts, convert.WithRasterFormat(format))
 	}
 	for _, co := range creationOpts {
 		k, v, ok := strings.Cut(co, "=")
 		if !ok {
 			return fmt.Errorf("gisconvert: -co value %q must be KEY=VAL", co)
 		}
-		opts = append(opts, gismanager.WithRasterCreationOption(k, v))
+		opts = append(opts, convert.WithRasterCreationOption(k, v))
 	}
 	if bbox != "" {
 		minX, minY, maxX, maxY, err := parseBBox(bbox)
 		if err != nil {
 			return err
 		}
-		opts = append(opts, gismanager.WithRasterOutputBounds(minX, minY, maxX, maxY))
+		opts = append(opts, convert.WithRasterOutputBounds(minX, minY, maxX, maxY))
 	}
 	if bands != "" {
 		bs, err := parseBands(bands)
 		if err != nil {
 			return err
 		}
-		opts = append(opts, gismanager.WithRasterBands(bs...))
+		opts = append(opts, convert.WithRasterBands(bs...))
 	}
 	if resample != "" {
-		opts = append(opts, gismanager.WithRasterResamplingAlg(resample))
+		opts = append(opts, convert.WithRasterResamplingAlg(resample))
 	}
 	if tr != "" {
 		xRes, yRes, err := parseRes(tr)
 		if err != nil {
 			return err
 		}
-		opts = append(opts, gismanager.WithRasterTargetResolution(xRes, yRes))
+		opts = append(opts, convert.WithRasterTargetResolution(xRes, yRes))
 	}
 	if cutlineDS != "" {
-		opts = append(opts, gismanager.WithRasterCutline(cutlineDS, cutlineLayer))
+		opts = append(opts, convert.WithRasterCutline(cutlineDS, cutlineLayer))
 	}
 
 	// Reproject mode: both -s-srs and -t-srs supplied (or just -t-srs;
@@ -193,15 +193,15 @@ func runRaster(ctx context.Context, src, dst, format, sSRS, tSRS, bbox,
 		if sSRS == "" {
 			return errors.New("gisconvert: raster reprojection requires both -s-srs and -t-srs")
 		}
-		return gismanager.ReprojectRaster(ctx, src, dst, sSRS, tSRS, opts...)
+		return convert.ReprojectRaster(ctx, src, dst, sSRS, tSRS, opts...)
 	}
 
 	// COG shortcut.
 	if cog {
-		return gismanager.ToCOG(ctx, src, dst, opts...)
+		return convert.ToCOG(ctx, src, dst, opts...)
 	}
 
-	return gismanager.ConvertRaster(ctx, src, dst, opts...)
+	return convert.ConvertRaster(ctx, src, dst, opts...)
 }
 
 // parseBBox parses "minX,minY,maxX,maxY" into four float64s.

@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestBuildVRT_TwoGeoTIFFs_Integration assembles two GeoTIFF inputs into
@@ -21,10 +21,10 @@ func TestBuildVRT_TwoGeoTIFFs_Integration(t *testing.T) {
 	src2 := mustFetched(t, "cog.tif")
 	dst := filepath.Join(t.TempDir(), "mosaic.vrt")
 
-	if err := gismanager.BuildVRT(context.Background(), dst,
+	if err := convert.BuildVRT(context.Background(), dst,
 		[]string{src1, src2},
-		gismanager.WithVRTResolution("highest"),
-		gismanager.WithVRTAllowProjectionDifference(),
+		convert.WithVRTResolution("highest"),
+		convert.WithVRTAllowProjectionDifference(),
 	); err != nil {
 		t.Fatalf("BuildVRT: %v", err)
 	}
@@ -52,10 +52,10 @@ func TestBuildVRT_SeparateMode_Integration(t *testing.T) {
 	src2 := mustFetched(t, "cog.tif")      // typically 1 band
 	dst := filepath.Join(t.TempDir(), "stack.vrt")
 
-	if err := gismanager.BuildVRT(context.Background(), dst,
+	if err := convert.BuildVRT(context.Background(), dst,
 		[]string{src1, src2},
-		gismanager.WithVRTSeparate(),
-		gismanager.WithVRTAllowProjectionDifference(),
+		convert.WithVRTSeparate(),
+		convert.WithVRTAllowProjectionDifference(),
 	); err != nil {
 		t.Fatalf("BuildVRT: %v", err)
 	}

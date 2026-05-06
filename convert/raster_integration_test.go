@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestConvertRaster_GeoTIFFToCOG_Integration exercises the most common
@@ -20,7 +20,7 @@ func TestConvertRaster_GeoTIFFToCOG_Integration(t *testing.T) {
 	src := mustFetched(t, "RGB.byte.tif")
 	dst := filepath.Join(t.TempDir(), "RGB.cog.tif")
 
-	if err := gismanager.ToCOG(context.Background(), src, dst); err != nil {
+	if err := convert.ToCOG(context.Background(), src, dst); err != nil {
 		t.Fatalf("ToCOG: %v", err)
 	}
 
@@ -54,9 +54,9 @@ func TestConvertRaster_GeoTIFFToPNG_Integration(t *testing.T) {
 	src := mustFetched(t, "RGB.byte.tif")
 	dst := filepath.Join(t.TempDir(), "RGB.png")
 
-	if err := gismanager.ConvertRaster(context.Background(), src, dst,
-		gismanager.WithRasterFormat("PNG"),
-		gismanager.WithRasterBands(1, 2, 3),
+	if err := convert.ConvertRaster(context.Background(), src, dst,
+		convert.WithRasterFormat("PNG"),
+		convert.WithRasterBands(1, 2, 3),
 	); err != nil {
 		t.Fatalf("ConvertRaster: %v", err)
 	}
@@ -82,8 +82,8 @@ func TestToCOG_OverridesDefaults_Integration(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "RGB.zstd.cog.tif")
 
 	// User picks ZSTD compression instead of the default DEFLATE.
-	if err := gismanager.ToCOG(context.Background(), src, dst,
-		gismanager.WithRasterCreationOption("COMPRESS", "ZSTD"),
+	if err := convert.ToCOG(context.Background(), src, dst,
+		convert.WithRasterCreationOption("COMPRESS", "ZSTD"),
 	); err != nil {
 		t.Skipf("ToCOG with ZSTD failed (GDAL build may lack zstd): %v", err)
 	}

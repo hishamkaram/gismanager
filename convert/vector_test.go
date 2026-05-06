@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 // TestBuildVectorTranslateArgs is a table-driven unit test that locks in
@@ -18,7 +20,7 @@ import (
 func TestBuildVectorTranslateArgs(t *testing.T) {
 	cases := []struct {
 		name string
-		opts []VectorConvertOption
+		opts []VectorOption
 		want []string
 	}{
 		{
@@ -28,17 +30,17 @@ func TestBuildVectorTranslateArgs(t *testing.T) {
 		},
 		{
 			name: "format only",
-			opts: []VectorConvertOption{WithVectorFormat("GPKG")},
+			opts: []VectorOption{WithVectorFormat("GPKG")},
 			want: []string{"-f", "GPKG"},
 		},
 		{
 			name: "overwrite",
-			opts: []VectorConvertOption{WithVectorOverwrite()},
+			opts: []VectorOption{WithVectorOverwrite()},
 			want: []string{"-overwrite"},
 		},
 		{
 			name: "source + target SRS",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				WithVectorSourceSRS("EPSG:4326"),
 				WithVectorTargetSRS("EPSG:3857"),
 			},
@@ -46,43 +48,43 @@ func TestBuildVectorTranslateArgs(t *testing.T) {
 		},
 		{
 			name: "bbox emits four float args after -spat",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				WithVectorBoundingBox(-10.5, -20, 30.25, 45.75),
 			},
 			want: []string{"-spat", "-10.5", "-20", "30.25", "45.75"},
 		},
 		{
 			name: "where clause",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				WithVectorWhere("CONTINENT = 'Africa'"),
 			},
 			want: []string{"-where", "CONTINENT = 'Africa'"},
 		},
 		{
 			name: "simplify with non-zero tolerance",
-			opts: []VectorConvertOption{WithVectorSimplify(0.001)},
+			opts: []VectorOption{WithVectorSimplify(0.001)},
 			want: []string{"-simplify", "0.001"},
 		},
 		{
 			name: "simplify with zero tolerance is dropped",
-			opts: []VectorConvertOption{WithVectorSimplify(0)},
+			opts: []VectorOption{WithVectorSimplify(0)},
 			want: nil,
 		},
 		{
 			name: "select fields",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				WithVectorSelectFields("NAME", "POP_EST", "CONTINENT"),
 			},
 			want: []string{"-select", "NAME,POP_EST,CONTINENT"},
 		},
 		{
 			name: "layer name",
-			opts: []VectorConvertOption{WithVectorLayerName("countries_3857")},
+			opts: []VectorOption{WithVectorLayerName("countries_3857")},
 			want: []string{"-nln", "countries_3857"},
 		},
 		{
 			name: "raw options append at end",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				WithVectorFormat("GPKG"),
 				WithVectorRawOptions("-lco", "FID=fid", "-skipfailures"),
 			},
@@ -90,7 +92,7 @@ func TestBuildVectorTranslateArgs(t *testing.T) {
 		},
 		{
 			name: "full pipeline: reproject + bbox + where + simplify + select + rename",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				WithVectorFormat("GPKG"),
 				WithVectorOverwrite(),
 				WithVectorTargetSRS("EPSG:3857"),
@@ -113,7 +115,7 @@ func TestBuildVectorTranslateArgs(t *testing.T) {
 		},
 		{
 			name: "nil options are tolerated",
-			opts: []VectorConvertOption{
+			opts: []VectorOption{
 				nil,
 				WithVectorFormat("GPKG"),
 				nil,
@@ -124,7 +126,7 @@ func TestBuildVectorTranslateArgs(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := newVectorConvertConfig(tc.opts)
+			cfg := newVectorConfig(tc.opts)
 			got := buildVectorTranslateArgs(cfg)
 			assert.Equal(t, tc.want, got)
 		})
@@ -133,9 +135,9 @@ func TestBuildVectorTranslateArgs(t *testing.T) {
 
 // TestWithVectorLogger_NilFallsBackToDefault confirms passing nil through
 // WithVectorLogger doesn't leave cfg.logger nil — the helper falls back
-// to GetLogger() so downstream callers can always emit structured logs.
+// to slogx.Default() so downstream callers can always emit structured logs.
 func TestWithVectorLogger_NilFallsBackToDefault(t *testing.T) {
-	cfg := newVectorConvertConfig([]VectorConvertOption{WithVectorLogger(nil)})
+	cfg := newVectorConfig([]VectorOption{WithVectorLogger(nil)})
 	assert.NotNil(t, cfg.logger, "logger must never be nil after option apply")
 }
 
@@ -145,7 +147,7 @@ func TestWithVectorLogger_NilFallsBackToDefault(t *testing.T) {
 func TestWithVectorLogger_CustomHandlerCaptured(t *testing.T) {
 	var buf bytes.Buffer
 	custom := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	cfg := newVectorConvertConfig([]VectorConvertOption{WithVectorLogger(custom)})
+	cfg := newVectorConfig([]VectorOption{WithVectorLogger(custom)})
 	cfg.logger.Debug("test", "key", "value")
 	assert.Contains(t, buf.String(), `"key":"value"`)
 }
@@ -164,18 +166,18 @@ func TestConvertVector_CtxCancelledFailsFast(t *testing.T) {
 }
 
 // TestConvertVector_OpenError_WrapsErrConvertFailed locks in the error
-// envelope: a missing source surfaces as *GISError wrapping
-// ErrConvertFailed, so callers can branch on the sentinel without
+// envelope: a missing source surfaces as *errs.GISError wrapping
+// errs.ErrConvertFailed, so callers can branch on the sentinel without
 // scraping strings.
 func TestConvertVector_OpenError_WrapsErrConvertFailed(t *testing.T) {
 	err := ConvertVector(context.Background(),
-		"./testdata/__definitely_does_not_exist__.geojson",
+		"../testdata/__definitely_does_not_exist__.geojson",
 		"/tmp/gismanager_should_not_be_created.gpkg")
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed),
-		"expected ErrConvertFailed, got %v", err)
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed),
+		"expected errs.ErrConvertFailed, got %v", err)
 
-	var gerr *GISError
-	assert.True(t, errors.As(err, &gerr), "expected *GISError envelope")
+	var gerr *errs.GISError
+	assert.True(t, errors.As(err, &gerr), "expected *errs.GISError envelope")
 	assert.Equal(t, "ConvertVector", gerr.Op)
 }

@@ -1,4 +1,4 @@
-package gismanager_test
+package convert_test
 
 // Runnable godoc examples for the conversion subsystem. Each example
 // runs hermetically via the dev container's GDAL build — the source
@@ -17,7 +17,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // ExampleConvertVector demonstrates a vector format conversion from
@@ -25,12 +25,12 @@ import (
 // filesystem write, no network. Same shape works for /vsis3/, /vsigs/,
 // /vsicurl/ destinations.
 func ExampleConvertVector() {
-	src := "./testdata/neighborhood_names_gis.geojson"
+	src := "../testdata/neighborhood_names_gis.geojson"
 	dst := "/vsimem/example_convert_vector.gpkg"
 
-	if err := gismanager.ConvertVector(context.Background(), src, dst,
-		gismanager.WithVectorFormat("GPKG"),
-		gismanager.WithVectorOverwrite(),
+	if err := convert.ConvertVector(context.Background(), src, dst,
+		convert.WithVectorFormat("GPKG"),
+		convert.WithVectorOverwrite(),
 	); err != nil {
 		fmt.Println("error:", err)
 		return
@@ -54,7 +54,7 @@ func ExampleToCOG() {
 	srcDS := driver.Create(src, 16, 16, 1, gdal.Byte, nil)
 	srcDS.Close()
 
-	if err := gismanager.ToCOG(context.Background(), src, dst); err != nil {
+	if err := convert.ToCOG(context.Background(), src, dst); err != nil {
 		fmt.Println("error:", err)
 		return
 	}
@@ -80,7 +80,7 @@ func ExampleReprojectRaster() {
 	srcDS.SetProjection(wkt)
 	srcDS.Close()
 
-	if err := gismanager.ReprojectRaster(context.Background(), src, dst,
+	if err := convert.ReprojectRaster(context.Background(), src, dst,
 		"EPSG:4326", "EPSG:3857",
 	); err != nil {
 		fmt.Println("error:", err)
@@ -93,13 +93,13 @@ func ExampleReprojectRaster() {
 // ExampleRasterize demonstrates burning vector features into a
 // raster grid (the gdal_rasterize equivalent).
 func ExampleRasterize() {
-	src := "./testdata/neighborhood_names_gis.geojson"
+	src := "../testdata/neighborhood_names_gis.geojson"
 	dst := "/vsimem/example_rasterize.tif"
 
-	if err := gismanager.Rasterize(context.Background(), src, dst,
-		gismanager.WithRasterizeFormat("GTiff"),
-		gismanager.WithRasterizeOutputSize(64, 64),
-		gismanager.WithRasterizeBurnValues(1),
+	if err := convert.Rasterize(context.Background(), src, dst,
+		convert.WithRasterizeFormat("GTiff"),
+		convert.WithRasterizeOutputSize(64, 64),
+		convert.WithRasterizeBurnValues(1),
 	); err != nil {
 		fmt.Println("error:", err)
 		return
@@ -123,7 +123,7 @@ func ExampleDEMProcessing() {
 	srcDS.SetGeoTransform([6]float64{0, 1, 0, 32, 0, -1})
 	srcDS.Close()
 
-	if err := gismanager.DEMProcessing(context.Background(), src, dst,
+	if err := convert.DEMProcessing(context.Background(), src, dst,
 		"hillshade",
 	); err != nil {
 		fmt.Println("error:", err)
@@ -149,7 +149,7 @@ func ExampleBuildVRT() {
 		ds.Close()
 	}
 
-	if err := gismanager.BuildVRT(context.Background(), dst,
+	if err := convert.BuildVRT(context.Background(), dst,
 		[]string{src1, src2},
 	); err != nil {
 		fmt.Println("error:", err)

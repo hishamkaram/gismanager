@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,6 +6,9 @@ import (
 	"log/slog"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
 // DEMOption configures a [DEMProcessing] call.
@@ -32,7 +35,7 @@ type demConfig struct {
 }
 
 func newDEMConfig(opts []DEMOption) *demConfig {
-	c := &demConfig{logger: GetLogger()}
+	c := &demConfig{logger: slogx.Default()}
 	for _, o := range opts {
 		if o != nil {
 			o(c)
@@ -42,11 +45,11 @@ func newDEMConfig(opts []DEMOption) *demConfig {
 }
 
 // WithDEMLogger sets the structured logger used during DEM processing.
-// nil falls back to [GetLogger].
+// nil falls back to [slogx.Default].
 func WithDEMLogger(l *slog.Logger) DEMOption {
 	return func(c *demConfig) {
 		if l == nil {
-			c.logger = GetLogger()
+			c.logger = slogx.Default()
 			return
 		}
 		c.logger = l
@@ -158,34 +161,34 @@ func WithDEMRawOptions(args ...string) DEMOption {
 //   - "TPI" — Topographic Position Index
 //   - "roughness" — local elevation variability
 //
-// Errors are wrapped with [ErrConvertFailed]; recover via [errors.As]
+// Errors are wrapped with [errs.ErrConvertFailed]; recover via [errors.As]
 // into [*GISError]. The Op field is "DEMProcessing".
 func DEMProcessing(ctx context.Context, src, dst, mode string, opts ...DEMOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if mode == "" {
-		return newGISError("DEMProcessing", fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed,
+		return errs.NewGISError("DEMProcessing", fmt.Sprintf("%s -> %s", src, dst),
+			errs.ErrConvertFailed,
 			fmt.Errorf("mode must be one of hillshade, slope, aspect, color-relief, TRI, TPI, roughness"))
 	}
 
 	cfg := newDEMConfig(opts)
 
 	if mode == "color-relief" && cfg.colorFile == "" {
-		return newGISError("DEMProcessing", src, ErrConvertFailed,
+		return errs.NewGISError("DEMProcessing", src, errs.ErrConvertFailed,
 			fmt.Errorf("mode=color-relief requires WithDEMColorFile"))
 	}
 
 	if err := validateGDALDriver(cfg.format); err != nil {
 		cfg.logger.Error("DEMProcessing: invalid format", "format", cfg.format, "err", err)
-		return newGISError("DEMProcessing", src, ErrConvertFailed, err)
+		return errs.NewGISError("DEMProcessing", src, errs.ErrConvertFailed, err)
 	}
 
 	srcDS, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("DEMProcessing: open source", "src", src, "err", err)
-		return newGISError("DEMProcessing", src, ErrConvertFailed, err)
+		return errs.NewGISError("DEMProcessing", src, errs.ErrConvertFailed, err)
 	}
 	defer srcDS.Close()
 
@@ -195,8 +198,8 @@ func DEMProcessing(ctx context.Context, src, dst, mode string, opts ...DEMOption
 
 	out, dErr := gdal.DEMProcessing(dst, srcDS, mode, cfg.colorFile, args)
 	if dErr != nil {
-		return newGISError("DEMProcessing", fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed, dErr)
+		return errs.NewGISError("DEMProcessing", fmt.Sprintf("%s -> %s", src, dst),
+			errs.ErrConvertFailed, dErr)
 	}
 	defer out.Close()
 	return nil

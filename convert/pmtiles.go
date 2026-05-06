@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/protomaps/go-pmtiles/pmtiles"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
 // PMTilesOption configures [ToPMTiles] at call time.
@@ -20,7 +23,7 @@ type pmtilesConfig struct {
 
 func newPMTilesConfig(opts []PMTilesOption) *pmtilesConfig {
 	cfg := &pmtilesConfig{
-		logger:      GetLogger(),
+		logger:      slogx.Default(),
 		deduplicate: true,
 	}
 	for _, opt := range opts {
@@ -61,9 +64,9 @@ func WithPMTilesDeduplicate(dedupe bool) PMTilesOption {
 //
 // Two-stage pipeline for callers who start from a raster:
 //
-//	if err := gismanager.ConvertRaster(ctx, "scene.tif", "scene.mbtiles",
-//	    gismanager.WithRasterFormat("MBTILES")); err != nil { ... }
-//	if err := gismanager.ToPMTiles(ctx, "scene.mbtiles", "scene.pmtiles"); err != nil { ... }
+//	if err := convert.ConvertRaster(ctx, "scene.tif", "scene.mbtiles",
+//	    convert.WithRasterFormat("MBTILES")); err != nil { ... }
+//	if err := convert.ToPMTiles(ctx, "scene.mbtiles", "scene.pmtiles"); err != nil { ... }
 //
 // PMTiles is the dominant 2026 single-file tile archive format,
 // suitable for serverless distribution from S3, HTTP, or any
@@ -73,7 +76,7 @@ func WithPMTilesDeduplicate(dedupe bool) PMTilesOption {
 // tracked as a v1.5 follow-up; for v1.4 the two-step path is
 // the supported route.
 //
-// Errors are wrapped with [ErrConvertFailed]; recover the underlying
+// Errors are wrapped with [errs.ErrConvertFailed]; recover the underlying
 // go-pmtiles or filesystem error via [errors.As] into [*GISError]. The
 // Op field is "ToPMTiles".
 func ToPMTiles(ctx context.Context, src, dst string, opts ...PMTilesOption) error {
@@ -87,7 +90,7 @@ func ToPMTiles(ctx context.Context, src, dst string, opts ...PMTilesOption) erro
 	// only the missing inode without naming the user-supplied path.
 	if _, err := os.Stat(src); err != nil {
 		cfg.logger.Error("ToPMTiles: stat source", "src", src, "err", err)
-		return newGISError("ToPMTiles", src, ErrConvertFailed, err)
+		return errs.NewGISError("ToPMTiles", src, errs.ErrConvertFailed, err)
 	}
 
 	// pmtiles.Convert wants a temp scratch *os.File for staging the
@@ -99,7 +102,7 @@ func ToPMTiles(ctx context.Context, src, dst string, opts ...PMTilesOption) erro
 	tmp, err := os.CreateTemp(tmpDir, ".gismanager-pmtiles-*.tmp")
 	if err != nil {
 		cfg.logger.Error("ToPMTiles: create temp file", "dir", tmpDir, "err", err)
-		return newGISError("ToPMTiles", dst, ErrConvertFailed, err)
+		return errs.NewGISError("ToPMTiles", dst, errs.ErrConvertFailed, err)
 	}
 	defer func() {
 		_ = tmp.Close()
@@ -116,9 +119,9 @@ func ToPMTiles(ctx context.Context, src, dst string, opts ...PMTilesOption) erro
 	stdLogger := slog.NewLogLogger(cfg.logger.Handler(), slog.LevelInfo)
 
 	if err := pmtiles.Convert(stdLogger, src, dst, cfg.deduplicate, tmp); err != nil {
-		return newGISError("ToPMTiles",
+		return errs.NewGISError("ToPMTiles",
 			fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed, err)
+			errs.ErrConvertFailed, err)
 	}
 	return nil
 }

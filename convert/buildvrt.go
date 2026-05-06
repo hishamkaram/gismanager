@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,6 +6,9 @@ import (
 	"log/slog"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
 // VRTOption configures a [BuildVRT] call. Construct via the
@@ -30,7 +33,7 @@ type vrtConfig struct {
 }
 
 func newVRTConfig(opts []VRTOption) *vrtConfig {
-	c := &vrtConfig{logger: GetLogger()}
+	c := &vrtConfig{logger: slogx.Default()}
 	for _, o := range opts {
 		if o != nil {
 			o(c)
@@ -40,11 +43,11 @@ func newVRTConfig(opts []VRTOption) *vrtConfig {
 }
 
 // WithVRTLogger sets the structured logger used during VRT build.
-// nil falls back to [GetLogger].
+// nil falls back to [slogx.Default].
 func WithVRTLogger(l *slog.Logger) VRTOption {
 	return func(c *vrtConfig) {
 		if l == nil {
-			c.logger = GetLogger()
+			c.logger = slogx.Default()
 			return
 		}
 		c.logger = l
@@ -140,14 +143,14 @@ func WithVRTRawOptions(args ...string) VRTOption {
 // `gdal.OpenEx(OFRaster|OFReadOnly)` and closed when [BuildVRT]
 // returns.
 //
-// Errors are wrapped with [ErrConvertFailed]; recover via
+// Errors are wrapped with [errs.ErrConvertFailed]; recover via
 // [errors.As] into [*GISError]. The Op field is "BuildVRT".
 func BuildVRT(ctx context.Context, dst string, srcs []string, opts ...VRTOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if len(srcs) == 0 {
-		return newGISError("BuildVRT", dst, ErrConvertFailed,
+		return errs.NewGISError("BuildVRT", dst, errs.ErrConvertFailed,
 			fmt.Errorf("at least one source path is required"))
 	}
 
@@ -164,7 +167,7 @@ func BuildVRT(ctx context.Context, dst string, srcs []string, opts ...VRTOption)
 		ds, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 		if err != nil {
 			cfg.logger.Error("BuildVRT: open source", "src", src, "err", err)
-			return newGISError("BuildVRT", src, ErrConvertFailed, err)
+			return errs.NewGISError("BuildVRT", src, errs.ErrConvertFailed, err)
 		}
 		ds.Close()
 	}
@@ -184,7 +187,7 @@ func BuildVRT(ctx context.Context, dst string, srcs []string, opts ...VRTOption)
 
 	out, vErr := gdal.BuildVRT(dst, zeroDS, srcs, args)
 	if vErr != nil {
-		return newGISError("BuildVRT", dst, ErrConvertFailed, vErr)
+		return errs.NewGISError("BuildVRT", dst, errs.ErrConvertFailed, vErr)
 	}
 	defer out.Close()
 	return nil

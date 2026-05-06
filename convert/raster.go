@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -7,13 +7,16 @@ import (
 	"strconv"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
-// RasterConvertOption configures [ConvertRaster], [ToCOG], and
+// RasterOption configures [ConvertRaster], [ToCOG], and
 // [ReprojectRaster]. Construct via the [WithRaster*] helpers.
-type RasterConvertOption func(*rasterConvertConfig)
+type RasterOption func(*rasterConfig)
 
-type rasterConvertConfig struct {
+type rasterConfig struct {
 	logger          *slog.Logger
 	format          string
 	creationOptions []string // raw "KEY=VAL" pairs for -co
@@ -32,8 +35,8 @@ type rasterBounds struct {
 	MinX, MinY, MaxX, MaxY float64
 }
 
-func newRasterConvertConfig(opts []RasterConvertOption) *rasterConvertConfig {
-	c := &rasterConvertConfig{logger: GetLogger()}
+func newRasterConfig(opts []RasterOption) *rasterConfig {
+	c := &rasterConfig{logger: slogx.Default()}
 	for _, o := range opts {
 		if o != nil {
 			o(c)
@@ -43,11 +46,11 @@ func newRasterConvertConfig(opts []RasterConvertOption) *rasterConvertConfig {
 }
 
 // WithRasterLogger sets the structured logger used during conversion.
-// nil falls back to [GetLogger].
-func WithRasterLogger(l *slog.Logger) RasterConvertOption {
-	return func(c *rasterConvertConfig) {
+// nil falls back to [slogx.Default].
+func WithRasterLogger(l *slog.Logger) RasterOption {
+	return func(c *rasterConfig) {
 		if l == nil {
-			c.logger = GetLogger()
+			c.logger = slogx.Default()
 			return
 		}
 		c.logger = l
@@ -57,16 +60,16 @@ func WithRasterLogger(l *slog.Logger) RasterConvertOption {
 // WithRasterFormat selects the GDAL output driver by name (e.g.
 // "GTiff", "COG", "PNG", "JPEG"). Maps to gdal_translate's `-of` and
 // gdalwarp's `-of`. When empty, GDAL infers from the destination path.
-func WithRasterFormat(driver string) RasterConvertOption {
-	return func(c *rasterConvertConfig) { c.format = driver }
+func WithRasterFormat(driver string) RasterOption {
+	return func(c *rasterConfig) { c.format = driver }
 }
 
 // WithRasterCreationOption appends a single driver-specific creation
 // option (e.g. "COMPRESS=DEFLATE", "TILING_SCHEME=GoogleMapsCompatible",
 // "BLOCKSIZE=512"). May be called multiple times to set several options.
 // Maps to `-co KEY=VAL`.
-func WithRasterCreationOption(key, val string) RasterConvertOption {
-	return func(c *rasterConvertConfig) {
+func WithRasterCreationOption(key, val string) RasterOption {
+	return func(c *rasterConfig) {
 		c.creationOptions = append(c.creationOptions, fmt.Sprintf("%s=%s", key, val))
 	}
 }
@@ -75,30 +78,30 @@ func WithRasterCreationOption(key, val string) RasterConvertOption {
 // in the source CRS units (for [ConvertRaster]'s `-projwin`) or target
 // CRS units (for [ReprojectRaster]'s `-te`). The wrapper picks the right
 // flag based on which entry point invoked it.
-func WithRasterOutputBounds(minX, minY, maxX, maxY float64) RasterConvertOption {
-	return func(c *rasterConvertConfig) {
+func WithRasterOutputBounds(minX, minY, maxX, maxY float64) RasterOption {
+	return func(c *rasterConfig) {
 		c.outputBounds = &rasterBounds{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}
 	}
 }
 
 // WithRasterBands selects a subset of source bands to copy, in the
 // given order. Maps to `-b 1 -b 2 ...`. Empty means all bands.
-func WithRasterBands(bands ...int) RasterConvertOption {
-	return func(c *rasterConvertConfig) { c.bands = append([]int(nil), bands...) }
+func WithRasterBands(bands ...int) RasterOption {
+	return func(c *rasterConfig) { c.bands = append([]int(nil), bands...) }
 }
 
 // WithRasterResamplingAlg sets the resampling algorithm for warp /
 // translate. Common values: "near", "bilinear", "cubic", "cubicspline",
 // "lanczos", "average", "mode", "max", "min". Maps to `-r`.
-func WithRasterResamplingAlg(alg string) RasterConvertOption {
-	return func(c *rasterConvertConfig) { c.resamplingAlg = alg }
+func WithRasterResamplingAlg(alg string) RasterOption {
+	return func(c *rasterConfig) { c.resamplingAlg = alg }
 }
 
 // WithRasterTargetResolution sets the output pixel size in target-CRS
 // units. Pass non-zero values for both axes; zero means "use source
 // resolution". Maps to `-tr xRes yRes`.
-func WithRasterTargetResolution(xRes, yRes float64) RasterConvertOption {
-	return func(c *rasterConvertConfig) {
+func WithRasterTargetResolution(xRes, yRes float64) RasterOption {
+	return func(c *rasterConfig) {
 		c.targetResX = xRes
 		c.targetResY = yRes
 		c.hasTargetRes = true
@@ -109,8 +112,8 @@ func WithRasterTargetResolution(xRes, yRes float64) RasterConvertOption {
 // within it) to mask the output by. Pixels outside the cutline polygon
 // are written as NoData. Maps to `-cutline <ds>` (and `-cl <layer>` if
 // non-empty). Useful for cookie-cutter clipping of imagery.
-func WithRasterCutline(ds, layer string) RasterConvertOption {
-	return func(c *rasterConvertConfig) {
+func WithRasterCutline(ds, layer string) RasterOption {
+	return func(c *rasterConfig) {
 		c.cutlineDS = ds
 		c.cutlineLayer = layer
 	}
@@ -119,8 +122,8 @@ func WithRasterCutline(ds, layer string) RasterConvertOption {
 // WithRasterRawOptions appends raw flag tokens to the generated
 // argument list. Use this to reach gdal_translate / gdalwarp flags the
 // typed helpers don't expose.
-func WithRasterRawOptions(args ...string) RasterConvertOption {
-	return func(c *rasterConvertConfig) { c.rawOptions = append(c.rawOptions, args...) }
+func WithRasterRawOptions(args ...string) RasterOption {
+	return func(c *rasterConfig) { c.rawOptions = append(c.rawOptions, args...) }
 }
 
 // ConvertRaster converts the raster source at src into dst, applying any
@@ -136,23 +139,23 @@ func WithRasterRawOptions(args ...string) RasterConvertOption {
 // For reprojection use [ReprojectRaster] instead — gdal_translate does
 // NOT reproject.
 //
-// Errors are wrapped with [ErrConvertFailed]; recover the underlying
+// Errors are wrapped with [errs.ErrConvertFailed]; recover the underlying
 // GDAL error via [errors.As] into [*GISError].
-func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOption) error {
+func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	cfg := newRasterConvertConfig(opts)
+	cfg := newRasterConfig(opts)
 
 	if err := validateGDALDriver(cfg.format); err != nil {
 		cfg.logger.Error("ConvertRaster: invalid format", "format", cfg.format, "err", err)
-		return newGISError("ConvertRaster", src, ErrConvertFailed, err)
+		return errs.NewGISError("ConvertRaster", src, errs.ErrConvertFailed, err)
 	}
 
 	srcDS, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("ConvertRaster: open source", "src", src, "err", err)
-		return newGISError("ConvertRaster", src, ErrConvertFailed, err)
+		return errs.NewGISError("ConvertRaster", src, errs.ErrConvertFailed, err)
 	}
 	defer srcDS.Close()
 
@@ -162,8 +165,8 @@ func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOp
 
 	out, tErr := gdal.Translate(dst, srcDS, args)
 	if tErr != nil {
-		return newGISError("ConvertRaster", fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed, tErr)
+		return errs.NewGISError("ConvertRaster", fmt.Sprintf("%s -> %s", src, dst),
+			errs.ErrConvertFailed, tErr)
 	}
 	defer out.Close()
 	return nil
@@ -181,14 +184,14 @@ func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOp
 //
 // Caller-supplied opts override any of the defaults — pass
 // `WithRasterCreationOption("COMPRESS", "ZSTD")` to swap codecs, etc.
-func ToCOG(ctx context.Context, src, dst string, opts ...RasterConvertOption) error {
-	defaults := []RasterConvertOption{
+func ToCOG(ctx context.Context, src, dst string, opts ...RasterOption) error {
+	defaults := []RasterOption{
 		WithRasterFormat("COG"),
 		WithRasterCreationOption("COMPRESS", "DEFLATE"),
 		WithRasterCreationOption("BLOCKSIZE", "512"),
 		WithRasterCreationOption("OVERVIEW_RESAMPLING", "NEAREST"),
 	}
-	merged := make([]RasterConvertOption, 0, len(defaults)+len(opts))
+	merged := make([]RasterOption, 0, len(defaults)+len(opts))
 	merged = append(merged, defaults...)
 	merged = append(merged, opts...)
 	return ConvertRaster(ctx, src, dst, merged...)
@@ -196,7 +199,7 @@ func ToCOG(ctx context.Context, src, dst string, opts ...RasterConvertOption) er
 
 // buildTranslateArgs renders cfg into gdal_translate-style args.
 // Unit-tested separately so the mapping is locked in without CGo.
-func buildTranslateArgs(cfg *rasterConvertConfig) []string {
+func buildTranslateArgs(cfg *rasterConfig) []string {
 	var args []string
 	if cfg.format != "" {
 		args = append(args, "-of", cfg.format)

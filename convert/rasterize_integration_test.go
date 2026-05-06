@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestRasterize_PolygonsToGeoTIFF_Integration burns the Africa subset
@@ -20,15 +20,15 @@ func TestRasterize_PolygonsToGeoTIFF_Integration(t *testing.T) {
 	src := mustFetched(t, "ne_110m_admin_0_countries.geojson")
 	dst := filepath.Join(t.TempDir(), "africa_mask.tif")
 
-	if err := gismanager.Rasterize(context.Background(), src, dst,
-		gismanager.WithRasterizeFormat("GTiff"),
-		gismanager.WithRasterizeOutputType("Byte"),
-		gismanager.WithRasterizeBurnValues(1.0),
-		gismanager.WithRasterizeWhere("CONTINENT = 'Africa'"),
+	if err := convert.Rasterize(context.Background(), src, dst,
+		convert.WithRasterizeFormat("GTiff"),
+		convert.WithRasterizeOutputType("Byte"),
+		convert.WithRasterizeBurnValues(1.0),
+		convert.WithRasterizeWhere("CONTINENT = 'Africa'"),
 		// Africa-ish bbox in 4326.
-		gismanager.WithRasterizeOutputBounds(-25, -40, 60, 40),
-		gismanager.WithRasterizeOutputSize(256, 256),
-		gismanager.WithRasterizeCreationOption("COMPRESS", "DEFLATE"),
+		convert.WithRasterizeOutputBounds(-25, -40, 60, 40),
+		convert.WithRasterizeOutputSize(256, 256),
+		convert.WithRasterizeCreationOption("COMPRESS", "DEFLATE"),
 	); err != nil {
 		t.Fatalf("Rasterize: %v", err)
 	}
@@ -58,11 +58,11 @@ func TestRasterize_AttributeBurn_Integration(t *testing.T) {
 	src := mustFetched(t, "ne_110m_admin_0_countries.geojson")
 	dst := filepath.Join(t.TempDir(), "pop_attr.tif")
 
-	if err := gismanager.Rasterize(context.Background(), src, dst,
-		gismanager.WithRasterizeFormat("GTiff"),
-		gismanager.WithRasterizeOutputType("Float32"),
-		gismanager.WithRasterizeAttribute("POP_EST"),
-		gismanager.WithRasterizeOutputSize(360, 180),
+	if err := convert.Rasterize(context.Background(), src, dst,
+		convert.WithRasterizeFormat("GTiff"),
+		convert.WithRasterizeOutputType("Float32"),
+		convert.WithRasterizeAttribute("POP_EST"),
+		convert.WithRasterizeOutputSize(360, 180),
 	); err != nil {
 		t.Fatalf("Rasterize: %v", err)
 	}

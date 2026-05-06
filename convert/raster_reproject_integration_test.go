@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestReprojectRaster_GeoTIFFToWebMercator_Integration exercises the
@@ -20,10 +20,10 @@ func TestReprojectRaster_GeoTIFFToWebMercator_Integration(t *testing.T) {
 	src := mustFetched(t, "RGB.byte.tif")
 	dst := filepath.Join(t.TempDir(), "RGB.3857.tif")
 
-	if err := gismanager.ReprojectRaster(context.Background(),
+	if err := convert.ReprojectRaster(context.Background(),
 		src, dst, "EPSG:32618", "EPSG:3857",
-		gismanager.WithRasterFormat("GTiff"),
-		gismanager.WithRasterResamplingAlg("bilinear"),
+		convert.WithRasterFormat("GTiff"),
+		convert.WithRasterResamplingAlg("bilinear"),
 	); err != nil {
 		t.Fatalf("ReprojectRaster: %v", err)
 	}

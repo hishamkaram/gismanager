@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,12 +6,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestBuildWarpArgs(t *testing.T) {
 	cases := []struct {
 		name   string
-		opts   []RasterConvertOption
+		opts   []RasterOption
 		srcSRS string
 		dstSRS string
 		want   []string
@@ -24,7 +26,7 @@ func TestBuildWarpArgs(t *testing.T) {
 		},
 		{
 			name: "with format and creation option",
-			opts: []RasterConvertOption{
+			opts: []RasterOption{
 				WithRasterFormat("GTiff"),
 				WithRasterCreationOption("COMPRESS", "DEFLATE"),
 			},
@@ -38,7 +40,7 @@ func TestBuildWarpArgs(t *testing.T) {
 		},
 		{
 			name: "output bounds use -te (target CRS) not -projwin",
-			opts: []RasterConvertOption{
+			opts: []RasterOption{
 				WithRasterOutputBounds(-180, -90, 180, 90),
 			},
 			srcSRS: "EPSG:4326",
@@ -50,7 +52,7 @@ func TestBuildWarpArgs(t *testing.T) {
 		},
 		{
 			name: "resampling + target resolution",
-			opts: []RasterConvertOption{
+			opts: []RasterOption{
 				WithRasterResamplingAlg("bilinear"),
 				WithRasterTargetResolution(30, 30),
 			},
@@ -64,7 +66,7 @@ func TestBuildWarpArgs(t *testing.T) {
 		},
 		{
 			name: "cutline emits -cutline + -cl + -crop_to_cutline",
-			opts: []RasterConvertOption{
+			opts: []RasterOption{
 				WithRasterCutline("clip.geojson", "outline"),
 			},
 			srcSRS: "EPSG:4326",
@@ -78,7 +80,7 @@ func TestBuildWarpArgs(t *testing.T) {
 		},
 		{
 			name: "cutline without explicit layer omits -cl",
-			opts: []RasterConvertOption{
+			opts: []RasterOption{
 				WithRasterCutline("clip.geojson", ""),
 			},
 			srcSRS: "EPSG:4326",
@@ -91,7 +93,7 @@ func TestBuildWarpArgs(t *testing.T) {
 		},
 		{
 			name: "raw options append at end",
-			opts: []RasterConvertOption{
+			opts: []RasterOption{
 				WithRasterRawOptions("-overwrite", "-multi"),
 			},
 			srcSRS: "EPSG:4326",
@@ -105,7 +107,7 @@ func TestBuildWarpArgs(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := newRasterConvertConfig(tc.opts)
+			cfg := newRasterConfig(tc.opts)
 			got := buildWarpArgs(cfg, tc.srcSRS, tc.dstSRS)
 			assert.Equal(t, tc.want, got)
 		})
@@ -126,25 +128,25 @@ func TestReprojectRaster_RejectsEmptySRS(t *testing.T) {
 		err := ReprojectRaster(context.Background(),
 			"/dev/null", "/tmp/out.tif", "", "EPSG:3857")
 		assert.Error(t, err)
-		assert.True(t, errors.Is(err, ErrConvertFailed))
+		assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 	})
 	t.Run("empty dstSRS", func(t *testing.T) {
 		err := ReprojectRaster(context.Background(),
 			"/dev/null", "/tmp/out.tif", "EPSG:4326", "")
 		assert.Error(t, err)
-		assert.True(t, errors.Is(err, ErrConvertFailed))
+		assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 	})
 }
 
 func TestReprojectRaster_OpenError_WrapsErrConvertFailed(t *testing.T) {
 	err := ReprojectRaster(context.Background(),
-		"./testdata/__definitely_does_not_exist__.tif",
+		"../testdata/__definitely_does_not_exist__.tif",
 		"/tmp/should_not_be_created.warped.tif",
 		"EPSG:32618", "EPSG:3857")
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "ReprojectRaster", gerr.Op)
 }
