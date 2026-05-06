@@ -97,10 +97,23 @@ CMD ["bash"]
 # ---------------------------------------------------------------------------
 FROM dev AS build
 
+# Version metadata baked in via -ldflags. Defaults work for `make image`
+# locally; the release workflow (.github/workflows/release.yml) overrides
+# all three from the tag.
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG DATE=unknown
+
 COPY . /workspace
-RUN go mod download \
-    && go build -trimpath -ldflags="-s -w" -o /out/gismanager ./cmd/gismanager \
-    && go build -trimpath -ldflags="-s -w" -o /out/layerSchema ./cmd/layerSchema
+RUN set -eux; \
+    LDFLAGS="-s -w \
+      -X github.com/hishamkaram/gismanager/cmd/internal/cli.Version=${VERSION} \
+      -X github.com/hishamkaram/gismanager/cmd/internal/cli.Commit=${COMMIT} \
+      -X github.com/hishamkaram/gismanager/cmd/internal/cli.Date=${DATE}"; \
+    go mod download; \
+    for bin in gismanager layerSchema gisconvert; do \
+      go build -trimpath -ldflags="$LDFLAGS" -o "/out/$bin" "./cmd/$bin"; \
+    done
 
 # ---------------------------------------------------------------------------
 # Stage 3: runtime — minimal image for shipping
@@ -113,5 +126,6 @@ FROM ghcr.io/osgeo/gdal:ubuntu-small-${GDAL_VERSION} AS runtime
 
 COPY --from=build /out/gismanager /usr/local/bin/gismanager
 COPY --from=build /out/layerSchema /usr/local/bin/layerSchema
+COPY --from=build /out/gisconvert /usr/local/bin/gisconvert
 
 ENTRYPOINT ["/usr/local/bin/gismanager"]
