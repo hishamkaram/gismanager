@@ -108,24 +108,36 @@ func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *
 	return nil
 }
 
+// ensureWorkspace looks up the GeoServer workspace by name and creates it
+// if missing. Errors are wrapped as *GISError with Op="ensureWorkspace"
+// and Sentinel=ErrGeoServerPublish so that errors.Is(...,
+// ErrGeoServerPublish) succeeds at every layer of the chain and the
+// underlying *geoserver.APIError remains recoverable via errors.As.
+// Callers (notably PublishGeoserverLayer) typically re-wrap the returned
+// *GISError with their own Op for the public-facing error envelope; the
+// inner GISError remains reachable via Unwrap for finer-grained triage.
 func ensureWorkspace(ctx context.Context, c *geoserver.Client, name string) error {
 	if _, err := c.Workspaces.Get(ctx, name); err == nil {
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
-		return fmt.Errorf("get workspace %q: %w", name, err)
+		return newGISError("ensureWorkspace", name, ErrGeoServerPublish, err)
 	}
 	if err := c.Workspaces.Create(ctx, &workspaces.Workspace{Name: name}); err != nil {
-		return fmt.Errorf("create workspace %q: %w", name, err)
+		return newGISError("ensureWorkspace", name, ErrGeoServerPublish, err)
 	}
 	return nil
 }
 
+// ensureDatastore looks up the PostGIS-backed datastore in the given
+// workspace and creates it if missing. Same error-wrapping contract as
+// [ensureWorkspace] — errors are *GISError with Op="ensureDatastore" and
+// Sentinel=ErrGeoServerPublish.
 func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds DatastoreConfig) error {
 	scoped := c.Datastores.InWorkspace(ws)
 	if _, err := scoped.Get(ctx, ds.Name); err == nil {
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
-		return fmt.Errorf("get datastore %q: %w", ds.Name, err)
+		return newGISError("ensureDatastore", ds.Name, ErrGeoServerPublish, err)
 	}
 	conn := datastores.PostGIS{
 		Name:     ds.Name,
@@ -136,7 +148,7 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 		Password: ds.DBPass,
 	}
 	if err := scoped.Create(ctx, conn); err != nil {
-		return fmt.Errorf("create datastore %q: %w", ds.Name, err)
+		return newGISError("ensureDatastore", ds.Name, ErrGeoServerPublish, err)
 	}
 	return nil
 }
