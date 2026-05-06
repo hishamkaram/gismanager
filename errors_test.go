@@ -89,6 +89,72 @@ func TestGISError_NestedChain(t *testing.T) {
 	}
 }
 
+// TestGISError_JoinedAggregation locks in the v1.4 [PublishAll] error
+// contract: each per-layer failure is appended to a slice, and the final
+// return value is errors.Join(slice...) — nil when empty, otherwise an
+// aggregate that walks through every wrapped GISError. Callers must be
+// able to:
+//
+//   - match any sentinel via errors.Is(joined, sentinel) regardless of
+//     which entry in the slice carries it;
+//   - extract the first matching *GISError via errors.As (typical
+//     "give me one example to log" path);
+//   - enumerate every per-layer failure via the unwrap-multiple
+//     interface (`interface{ Unwrap() []error }`).
+//
+// The test constructs a representative joined error directly rather than
+// driving a real PublishAll, since PublishAll requires PostGIS +
+// GeoServer; the errors.Join + GISError mechanics this guards are
+// independent of that infrastructure.
+func TestGISError_JoinedAggregation(t *testing.T) {
+	a := newGISError("PublishGeoserverLayer", "ws/ds/A", ErrGeoServerPublish, errors.New("500 Internal Server Error"))
+	b := newGISError("LayerToPostgis", "ds-B", ErrPostGISConnect, errors.New("dial tcp: refused"))
+	c := newGISError("PublishGeoserverLayer", "ws/ds/C", ErrGeoServerPublish, errors.New("conflict"))
+
+	// Empty join is nil — locks in the "no-failures returns nil"
+	// branch of PublishAll.
+	if errors.Join() != nil {
+		t.Errorf("errors.Join() with no args = non-nil; want nil")
+	}
+
+	joined := errors.Join(a, b, c)
+	if joined == nil {
+		t.Fatal("errors.Join(a,b,c) = nil; want non-nil")
+	}
+
+	if !errors.Is(joined, ErrGeoServerPublish) {
+		t.Errorf("errors.Is(joined, ErrGeoServerPublish) = false; want true (a or c carries it)")
+	}
+	if !errors.Is(joined, ErrPostGISConnect) {
+		t.Errorf("errors.Is(joined, ErrPostGISConnect) = false; want true (b carries it)")
+	}
+	if errors.Is(joined, ErrUnsupportedFormat) {
+		t.Errorf("errors.Is(joined, ErrUnsupportedFormat) = true; want false")
+	}
+
+	// errors.As surfaces the FIRST *GISError in the joined chain (Go's
+	// stdlib walks left-to-right). For PublishAll this is always
+	// useful: callers usually just want one example to log.
+	var first *GISError
+	if !errors.As(joined, &first) {
+		t.Fatal("errors.As did not extract a *GISError from the joined chain")
+	}
+	if first.Op != "PublishGeoserverLayer" || first.Source != "ws/ds/A" {
+		t.Errorf("errors.As surfaced the wrong leaf: Op=%q Source=%q", first.Op, first.Source)
+	}
+
+	// Enumerate via the unwrap-multiple interface — the documented
+	// path for "show me every failure" callers (e.g. CLI summaries
+	// or batch dashboards).
+	var multi interface{ Unwrap() []error }
+	if !errors.As(joined, &multi) {
+		t.Fatal("errors.As to the multi-Unwrap interface failed")
+	}
+	if got := len(multi.Unwrap()); got != 3 {
+		t.Errorf("Unwrap() returned %d errors; want 3", got)
+	}
+}
+
 func TestGISError_ErrorFormatsByCombination(t *testing.T) {
 	cases := []struct {
 		name string
