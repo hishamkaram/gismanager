@@ -28,7 +28,7 @@ RUN := $(COMPOSE) run --rm -T $(DEV_SERVICE)
 ARGS ?=
 GEOSERVER_VERSION ?= 2.28.0
 
-.PHONY: help dev shell build test test-unit test-integration lint lint-fix \
+.PHONY: help dev shell build build-cli test test-unit test-integration lint lint-fix \
         vuln tidy fmt vet image clean fetch-testdata \
         compose-up compose-down compose-test-up compose-test-down compose-test-logs
 
@@ -46,6 +46,20 @@ shell: dev ## alias for `make dev`
 
 build: ## go build ./...
 	$(RUN) go build $(ARGS) ./...
+
+# Version metadata injected into the cmd/internal/cli package via -ldflags.
+# Override any of these by exporting them in the environment before invoking
+# `make build-cli` — useful in release workflows that pin a specific tag.
+LDFLAGS_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+LDFLAGS_DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS_PKG     := github.com/hishamkaram/gismanager/cmd/internal/cli
+LDFLAGS         := -X $(LDFLAGS_PKG).Version=$(LDFLAGS_VERSION) \
+                   -X $(LDFLAGS_PKG).Commit=$(LDFLAGS_COMMIT) \
+                   -X $(LDFLAGS_PKG).Date=$(LDFLAGS_DATE)
+
+build-cli: ## go build ./cmd/... with version ldflags injected
+	$(RUN) go build -ldflags='$(LDFLAGS)' $(ARGS) ./cmd/...
 
 test: test-unit ## alias for test-unit
 
