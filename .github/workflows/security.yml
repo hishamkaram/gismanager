@@ -16,9 +16,9 @@ name: Security scans
 
 on:
   push:
-    branches: [master]
+    branches: [master, "release/v*"]
   pull_request:
-    branches: [master]
+    branches: [master, "release/v*"]
   schedule:
     # Sundays at 04:23 UTC — outside common deploy windows; offset 1 hour
     # from integration.yml's Sunday cron so the two don't compete for
