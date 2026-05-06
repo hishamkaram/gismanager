@@ -109,9 +109,24 @@ jobs:
       - name: Run integration tests
         run: docker compose -f docker-compose.test.yml run --rm -T test-runner go test -race -tags=integration -timeout=15m -count=1 ./...
 
-      - name: Compose logs (on failure)
+      - name: Capture compose logs (on failure)
         if: failure()
-        run: docker compose -f docker-compose.test.yml logs --no-color --tail=400
+        run: |
+          set -ex
+          mkdir -p ./compose-logs
+          docker compose -f docker-compose.test.yml logs --no-color --tail=400 \
+            > "./compose-logs/compose-logs-${{ matrix.geoserver }}.txt" 2>&1 || true
+          # Keep a tail in the workflow log too for quick triage.
+          tail -n 200 "./compose-logs/compose-logs-${{ matrix.geoserver }}.txt" || true
+
+      - name: Upload compose logs artifact (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs-${{ matrix.geoserver }}
+          path: ./compose-logs/compose-logs-${{ matrix.geoserver }}.txt
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Tear down
         if: always()

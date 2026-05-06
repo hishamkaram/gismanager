@@ -1,0 +1,55 @@
+# Files excluded from the Docker build context.
+#
+# Background: every `docker build` (or `docker buildx build`) sends the
+# entire context to the Docker daemon, even files no FROM stage references.
+# Without a .dockerignore the dev image build pulls in `.git/` (large
+# history), `testdata-fetched/` (fetched fixtures, hundreds of MB), and
+# the bash-only `.claude/` subtree — all wasted bandwidth and cache churn.
+#
+# Keep this list in sync with what `Dockerfile` and `docker/Dockerfile`
+# actually need. The build stage runs `COPY . /workspace`, so anything
+# not excluded here ends up baked into the build cache.
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# CI / GitHub metadata (workflows aren't read at build time)
+.github/
+
+# Dev-only IDE config
+.devcontainer/
+.vscode/
+.idea/
+
+# Claude Code per-project config
+.claude/
+
+# Compose configs (used by `make compose-test-up`, not by docker build)
+docker-compose.yml
+docker-compose.test.yml
+
+# Testdata that's fetched on demand by `make fetch-testdata`. Large; not
+# needed for `go build`. Unit/integration tests inside the dev container
+# use the volume mount, not the baked-in copy.
+testdata-fetched/
+
+# Local build artifacts
+bin/
+dist/
+*.test
+*.out
+coverage.html
+coverage.txt
+*.cover
+
+# OS / editor leftovers
+.DS_Store
+._*
+*.swp
+*~
+
+# Operator-only local config
+local_config.yaml
+play/
