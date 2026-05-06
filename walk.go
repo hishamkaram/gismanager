@@ -2,6 +2,7 @@ package gismanager
 
 import (
 	"context"
+	"errors"
 	"iter"
 
 	"github.com/lukeroth/gdal"
@@ -111,14 +112,41 @@ func walkLayers(manager *ManagerConfig, ctx context.Context, source *gdal.DataSo
 //
 // PublishAll opens the configured PostGIS datastore once at the top
 // (re-using it across every file's layers), so the caller doesn't pay
-// the per-file PostGIS-open cost. Per-file failures are logged via the
-// manager's logger and the loop continues.
+// the per-file PostGIS-open cost.
 //
-// The returned error is non-nil only when a setup step fails (e.g.
-// the PostGIS datastore cannot be opened). Per-layer publish failures
-// are logged and skipped — see the manager's logger output for
-// diagnostics. Future versions may aggregate per-layer errors; the
-// current shape matches `cmd/gismanager`'s pre-PR-3 behavior.
+// Error semantics (since v1.4):
+//
+//   - Setup failures abort the operation. If [(*ManagerConfig).OpenSource]
+//     can't open the PostGIS datastore, PublishAll returns the wrapped
+//     error directly without attempting any layer.
+//   - Per-layer failures (walk errors, PostGIS load errors, GeoServer
+//     publish errors) do NOT abort the loop. Each is logged via the
+//     manager's logger AND collected for aggregation.
+//   - The final return value is [errors.Join] of every collected
+//     per-layer error, or nil if every layer succeeded.
+//
+// Callers can branch on the aggregated result with
+// `errors.Is(err, ErrGeoServerPublish)` / `errors.Is(err, ErrPostGISConnect)`
+// — the joined error walks through every collected failure, so any
+// match in the chain returns true. To enumerate per-layer failures
+// individually, type-assert via `errors.As(err, &gerr)` repeatedly or
+// use a small unwrap walker:
+//
+//	if err := mgr.PublishAll(ctx); err != nil {
+//	    var u interface{ Unwrap() []error }
+//	    if errors.As(err, &u) {
+//	        for _, e := range u.Unwrap() {
+//	            // inspect each per-layer failure
+//	        }
+//	    }
+//	}
+//
+// Pre-v1.4 callers that did `if err := mgr.PublishAll(ctx); err != nil`
+// continue to work — the change strictly adds information. Callers that
+// relied on PublishAll returning nil even when individual layers failed
+// will now see those failures surface; that previous behavior was an
+// acknowledged silent-failure mode (see the v1.3 doc comment) and the
+// aggregated form is the documented path forward.
 func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
 	logger := manager.logger
 	if logger == nil {
@@ -130,14 +158,17 @@ func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
 	}
 	defer target.Destroy()
 
-	for item, err := range manager.Walk(ctx) {
-		if err != nil {
-			logger.Error("walk", "err", err)
+	var perLayerErrs []error
+	for item, walkErr := range manager.Walk(ctx) {
+		if walkErr != nil {
+			logger.Error("walk", "err", walkErr)
+			perLayerErrs = append(perLayerErrs, walkErr)
 			continue
 		}
 		newLayer, postgisErr := item.Layer.LayerToPostgis(target, manager, true)
 		if postgisErr != nil {
 			logger.Error("load to postgis", "file", item.Path, "err", postgisErr)
+			perLayerErrs = append(perLayerErrs, postgisErr)
 			continue
 		}
 		if newLayer == nil || newLayer.Layer == nil {
@@ -145,9 +176,10 @@ func (manager *ManagerConfig) PublishAll(ctx context.Context) error {
 		}
 		if pubErr := manager.PublishGeoserverLayer(ctx, newLayer); pubErr != nil {
 			logger.Error("publish", "file", item.Path, "err", pubErr)
+			perLayerErrs = append(perLayerErrs, pubErr)
 			continue
 		}
 		logger.Info("published", "file", item.Path, "layer", newLayer.Name())
 	}
-	return nil
+	return errors.Join(perLayerErrs...)
 }
