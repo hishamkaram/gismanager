@@ -1,0 +1,17 @@
+# Demo config that exercises ${VAR} interpolation. FromConfig substitutes
+# os-env values for every operator-supplied string field before
+# validating; see TestFromConfig_ExpandsEnvVars for the lock-in.
+geoserver:
+  url: ${GISMGR_TEST_GS_URL}
+  username: ${GISMGR_TEST_GS_USER}
+  password: ${GISMGR_TEST_GS_PASS}
+  workspace: golang
+datastore:
+  host: ${GISMGR_TEST_PG_HOST}
+  port: 5432
+  database: gis
+  username: ${GISMGR_TEST_PG_USER}
+  password: ${GISMGR_TEST_PG_PASS}
+  name: gismanager_data
+source:
+  path: ${GISMGR_TEST_SRC_PATH}
