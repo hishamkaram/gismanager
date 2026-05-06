@@ -30,6 +30,7 @@ func TestGetDriver_Table(t *testing.T) {
 		{name: "geojson", path: "data/places.geojson", wantDriver: geoJSONDriver},
 		{name: "json-as-geojson", path: "data/places.json", wantDriver: geoJSONDriver},
 		{name: "kml", path: "data/places.kml", wantDriver: kmlDriver},
+		{name: "geoparquet", path: "data/cities.parquet", wantDriver: parquetDriver},
 
 		// --- supported extensions, uppercase / mixed (filepath.Ext is
 		// case-sensitive but GetDriver lowercases internally, so these
@@ -38,6 +39,7 @@ func TestGetDriver_Table(t *testing.T) {
 		{name: "geojson-mixed", path: "data/Places.GeoJSON", wantDriver: geoJSONDriver},
 		{name: "kml-uppercase", path: "data/PLACES.KML", wantDriver: kmlDriver},
 		{name: "geopackage-mixed", path: "data/Sample.Gpkg", wantDriver: geopackageDriver},
+		{name: "geoparquet-uppercase", path: "data/CITIES.PARQUET", wantDriver: parquetDriver},
 
 		// --- PostgreSQL connection strings (pgRegex match) ---
 		{name: "pg-typical", path: "PG: host=localhost port=5432 dbname=gis user=u password=p", wantDriver: postgreSQLDriver},

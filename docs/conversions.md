@@ -50,6 +50,47 @@ err := gismanager.ConvertVector(ctx, src, dst,
 )
 ```
 
+### GeoParquet *(v1.4+)*
+
+`gismanager` v1.4 added GeoParquet support to the conversion subsystem
+and the publish-pipeline OGR dispatch. The `.parquet` extension routes
+to the GDAL `Parquet` driver in [`OpenSource`](../manager.go) and
+`GetDriver`, and `ConvertVector` accepts `Parquet` as a target format.
+
+```go
+// Convert a Shapefile bundle into GeoParquet (cloud-native interchange).
+err := gismanager.ConvertVector(ctx,
+    "/vsizip//data/countries.zip",
+    "/data/countries.parquet",
+    gismanager.WithVectorFormat("Parquet"),
+    gismanager.WithVectorOverwrite(),
+)
+
+// Read a GeoParquet file via the publish pipeline (manager-driven).
+mgr, _ := gismanager.New(/* ... */)
+ds, _ := mgr.OpenSource(ctx, "/data/cities.parquet", 0)
+defer ds.Destroy()
+```
+
+**Image variant.** GeoParquet support requires the `Parquet` GDAL OGR
+driver, which is bundled in the `ubuntu-full` GDAL image variant but
+**not** in `ubuntu-small`. v1.4 changed the project's `Dockerfile` base
+from `ubuntu-small` to `ubuntu-full` so both the dev image and the
+published runtime image carry the driver out of the box.
+
+The trade-off is image size — the dev/runtime images grew from ~2 GB to
+~4 GB. Operators who don't need GeoParquet can pin `GDAL_BASE_DIGEST`
+in the `Dockerfile` back to the `ubuntu-small` manifest list digest for
+a lighter image. The publish-pipeline driver dispatch and conversion
+options stay unchanged either way; only `.parquet` paths fail at the
+GDAL boundary on `ubuntu-small` (with a "driver not registered" error).
+
+**Why GeoParquet.** It is the dominant 2026 interchange format for
+cloud-native geospatial data — STAC catalogs, Apache Iceberg geospatial
+tables, and lakehouse pipelines all use it. Adding driver dispatch +
+the `ubuntu-full` base lets gismanager publish from a Parquet source
+the same way it publishes from a Shapefile or GeoPackage today.
+
 ## Raster conversion
 
 ### GeoTIFF → Cloud-Optimized GeoTIFF
