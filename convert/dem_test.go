@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestBuildDEMArgs(t *testing.T) {
@@ -110,7 +112,7 @@ func TestDEMProcessing_RejectsEmptyMode(t *testing.T) {
 	err := DEMProcessing(context.Background(),
 		"/dev/null", "/tmp/out.tif", "")
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 	assert.Contains(t, err.Error(), "mode")
 }
 
@@ -118,19 +120,19 @@ func TestDEMProcessing_ColorReliefRequiresColorFile(t *testing.T) {
 	err := DEMProcessing(context.Background(),
 		"/dev/null", "/tmp/out.tif", "color-relief")
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 	assert.Contains(t, err.Error(), "WithDEMColorFile")
 }
 
 func TestDEMProcessing_OpenError_WrapsErrConvertFailed(t *testing.T) {
 	err := DEMProcessing(context.Background(),
-		"./testdata/__definitely_does_not_exist__.tif",
+		"../testdata/__definitely_does_not_exist__.tif",
 		"/tmp/should_not_be_created.hs.tif",
 		"hillshade")
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "DEMProcessing", gerr.Op)
 }

@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestDEMProcessing_Hillshade_Integration runs hillshade against the
@@ -20,10 +20,10 @@ func TestDEMProcessing_Hillshade_Integration(t *testing.T) {
 	src := mustFetched(t, "RGB.byte.tif")
 	dst := filepath.Join(t.TempDir(), "hs.tif")
 
-	if err := gismanager.DEMProcessing(context.Background(), src, dst, "hillshade",
-		gismanager.WithDEMFormat("GTiff"),
-		gismanager.WithDEMAzimuth(315),
-		gismanager.WithDEMAltitude(45),
+	if err := convert.DEMProcessing(context.Background(), src, dst, "hillshade",
+		convert.WithDEMFormat("GTiff"),
+		convert.WithDEMAzimuth(315),
+		convert.WithDEMAltitude(45),
 	); err != nil {
 		t.Fatalf("DEMProcessing hillshade: %v", err)
 	}
@@ -46,8 +46,8 @@ func TestDEMProcessing_Slope_Integration(t *testing.T) {
 	src := mustFetched(t, "RGB.byte.tif")
 	dst := filepath.Join(t.TempDir(), "slope.tif")
 
-	if err := gismanager.DEMProcessing(context.Background(), src, dst, "slope",
-		gismanager.WithDEMFormat("GTiff"),
+	if err := convert.DEMProcessing(context.Background(), src, dst, "slope",
+		convert.WithDEMFormat("GTiff"),
 	); err != nil {
 		t.Fatalf("DEMProcessing slope: %v", err)
 	}
@@ -69,8 +69,8 @@ func TestDEMProcessing_TRI_Integration(t *testing.T) {
 	src := mustFetched(t, "RGB.byte.tif")
 	dst := filepath.Join(t.TempDir(), "tri.tif")
 
-	if err := gismanager.DEMProcessing(context.Background(), src, dst, "TRI",
-		gismanager.WithDEMFormat("GTiff"),
+	if err := convert.DEMProcessing(context.Background(), src, dst, "TRI",
+		convert.WithDEMFormat("GTiff"),
 	); err != nil {
 		t.Fatalf("DEMProcessing TRI: %v", err)
 	}

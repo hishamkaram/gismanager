@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestValidateGDALDriver(t *testing.T) {
@@ -33,17 +35,17 @@ func TestValidateGDALDriver(t *testing.T) {
 
 // TestConvertVector_PreValidatesFormat closes the v1.2 silent-failure
 // gap on the vector side: an unknown WithVectorFormat is rejected before
-// the C call, with the standard *GISError envelope.
+// the C call, with the standard *errs.GISError envelope.
 func TestConvertVector_PreValidatesFormat(t *testing.T) {
 	err := ConvertVector(context.Background(),
-		"./testdata/neighborhood_names_gis.geojson",
+		"../testdata/neighborhood_names_gis.geojson",
 		"/tmp/should_not_be_created.bogus",
 		WithVectorFormat("BOGUS_FORMAT_NEVER_EXISTS"),
 	)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "ConvertVector", gerr.Op)
 }
@@ -54,23 +56,23 @@ func TestConvertRaster_PreValidatesFormat(t *testing.T) {
 		WithRasterFormat("BOGUS_FORMAT_NEVER_EXISTS"),
 	)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "ConvertRaster", gerr.Op)
 }
 
 func TestRasterize_PreValidatesFormat(t *testing.T) {
 	err := Rasterize(context.Background(),
-		"./testdata/neighborhood_names_gis.geojson",
+		"../testdata/neighborhood_names_gis.geojson",
 		"/tmp/out.tif",
 		WithRasterizeFormat("BOGUS_FORMAT_NEVER_EXISTS"),
 	)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "Rasterize", gerr.Op)
 }
@@ -81,9 +83,9 @@ func TestDEMProcessing_PreValidatesFormat(t *testing.T) {
 		WithDEMFormat("BOGUS_FORMAT_NEVER_EXISTS"),
 	)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "DEMProcessing", gerr.Op)
 }

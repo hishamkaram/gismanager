@@ -1,10 +1,12 @@
-package gismanager
+package convert
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 // ReprojectRaster reprojects the raster source at src into dst, going
@@ -25,34 +27,34 @@ import (
 // interpreted in the *target* CRS (gdalwarp's `-te` semantics), not
 // the source CRS (gdal_translate's `-projwin`).
 //
-// Errors are wrapped with [ErrConvertFailed]; recover via
+// Errors are wrapped with [errs.ErrConvertFailed]; recover via
 // [errors.As] into [*GISError]. The Op field is "ReprojectRaster".
 //
 // Driver names supplied via [WithRasterFormat] are pre-validated; an
-// unknown driver surfaces as a clean ErrConvertFailed before the C
+// unknown driver surfaces as a clean errs.ErrConvertFailed before the C
 // call. Other silent-failure modes (invalid CRS strings, malformed
 // option values) still rely on GDAL surfacing a non-zero cerr.
-func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts ...RasterConvertOption) error {
+func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts ...RasterOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if srcSRS == "" || dstSRS == "" {
-		return newGISError("ReprojectRaster", fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed,
+		return errs.NewGISError("ReprojectRaster", fmt.Sprintf("%s -> %s", src, dst),
+			errs.ErrConvertFailed,
 			fmt.Errorf("srcSRS and dstSRS must both be non-empty"))
 	}
 
-	cfg := newRasterConvertConfig(opts)
+	cfg := newRasterConfig(opts)
 
 	if err := validateGDALDriver(cfg.format); err != nil {
 		cfg.logger.Error("ReprojectRaster: invalid format", "format", cfg.format, "err", err)
-		return newGISError("ReprojectRaster", src, ErrConvertFailed, err)
+		return errs.NewGISError("ReprojectRaster", src, errs.ErrConvertFailed, err)
 	}
 
 	srcDS, err := gdal.OpenEx(src, gdal.OFRaster|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("ReprojectRaster: open source", "src", src, "err", err)
-		return newGISError("ReprojectRaster", src, ErrConvertFailed, err)
+		return errs.NewGISError("ReprojectRaster", src, errs.ErrConvertFailed, err)
 	}
 	defer srcDS.Close()
 
@@ -62,8 +64,8 @@ func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts 
 
 	out, wErr := gdal.Warp(dst, nil, []gdal.Dataset{srcDS}, args)
 	if wErr != nil {
-		return newGISError("ReprojectRaster", fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed, wErr)
+		return errs.NewGISError("ReprojectRaster", fmt.Sprintf("%s -> %s", src, dst),
+			errs.ErrConvertFailed, wErr)
 	}
 	defer out.Close()
 	return nil
@@ -78,7 +80,7 @@ func ReprojectRaster(ctx context.Context, src, dst, srcSRS, dstSRS string, opts 
 //     a warp-only flag; gdal_translate does not support it).
 //
 // Unit-tested separately so the mapping is locked in without CGo.
-func buildWarpArgs(cfg *rasterConvertConfig, srcSRS, dstSRS string) []string {
+func buildWarpArgs(cfg *rasterConfig, srcSRS, dstSRS string) []string {
 	var args []string
 	if cfg.format != "" {
 		args = append(args, "-of", cfg.format)

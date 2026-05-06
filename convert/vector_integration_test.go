@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestConvertVector_ShapefileToGeoPackage_Integration exercises the most
@@ -25,9 +25,9 @@ func TestConvertVector_ShapefileToGeoPackage_Integration(t *testing.T) {
 	src := "/vsizip/" + mustFetched(t, "ne_110m_admin_0_countries.zip")
 	dst := filepath.Join(t.TempDir(), "countries.gpkg")
 
-	if err := gismanager.ConvertVector(context.Background(), src, dst,
-		gismanager.WithVectorFormat("GPKG"),
-		gismanager.WithVectorOverwrite(),
+	if err := convert.ConvertVector(context.Background(), src, dst,
+		convert.WithVectorFormat("GPKG"),
+		convert.WithVectorOverwrite(),
 	); err != nil {
 		t.Fatalf("ConvertVector: %v", err)
 	}
@@ -73,14 +73,14 @@ func TestConvertVector_GeoJSONReprojectAndFilter_Integration(t *testing.T) {
 	src := mustFetched(t, "ne_110m_admin_0_countries.geojson")
 	dst := filepath.Join(t.TempDir(), "africa_3857.gpkg")
 
-	if err := gismanager.ConvertVector(context.Background(), src, dst,
-		gismanager.WithVectorFormat("GPKG"),
-		gismanager.WithVectorOverwrite(),
-		gismanager.WithVectorTargetSRS("EPSG:3857"),
+	if err := convert.ConvertVector(context.Background(), src, dst,
+		convert.WithVectorFormat("GPKG"),
+		convert.WithVectorOverwrite(),
+		convert.WithVectorTargetSRS("EPSG:3857"),
 		// Africa-ish bbox in 4326 (-spat applies to source CRS by default).
-		gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
-		gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
-		gismanager.WithVectorLayerName("africa_3857"),
+		convert.WithVectorBoundingBox(-25, -40, 60, 40),
+		convert.WithVectorWhere("CONTINENT = 'Africa'"),
+		convert.WithVectorLayerName("africa_3857"),
 	); err != nil {
 		t.Fatalf("ConvertVector: %v", err)
 	}
@@ -119,9 +119,9 @@ func TestConvertVector_Idempotent_Integration(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "countries.gpkg")
 
 	for i := 0; i < 2; i++ {
-		if err := gismanager.ConvertVector(context.Background(), src, dst,
-			gismanager.WithVectorFormat("GPKG"),
-			gismanager.WithVectorOverwrite(),
+		if err := convert.ConvertVector(context.Background(), src, dst,
+			convert.WithVectorFormat("GPKG"),
+			convert.WithVectorOverwrite(),
 		); err != nil {
 			t.Fatalf("iteration %d: %v", i+1, err)
 		}
@@ -139,9 +139,13 @@ func TestConvertVector_Idempotent_Integration(t *testing.T) {
 // mustFetched returns the absolute path to a fixture inside
 // `testdata-fetched/`. It t.Skips the test if the fixture is missing
 // (the user forgot to run `make fetch-testdata`); CI always pre-fetches.
+//
+// The fetched fixtures live at the module root; tests in this convert/
+// subpackage are one level down so the relative join is
+// "../testdata-fetched". Same fixture set as the v1.x layout.
 func mustFetched(t *testing.T, name string) string {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("testdata-fetched", name))
+	abs, err := filepath.Abs(filepath.Join("..", "testdata-fetched", name))
 	if err != nil {
 		t.Fatalf("filepath.Abs: %v", err)
 	}

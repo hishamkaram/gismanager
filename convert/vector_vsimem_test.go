@@ -1,4 +1,4 @@
-package gismanager_test
+package convert_test
 
 // Note: this file lives under the _test.go non-integration build tag so it
 // runs in the unit suite. It exercises GDAL's /vsimem/ in-process VFS
@@ -12,7 +12,7 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestConvertVector_VsiMemDestination_Unit confirms ConvertVector accepts
@@ -20,16 +20,16 @@ import (
 // readable. The source is the tracked legacy fixture so this test stays
 // in the unit suite (no `make fetch-testdata` prerequisite).
 func TestConvertVector_VsiMemDestination_Unit(t *testing.T) {
-	src := "./testdata/neighborhood_names_gis.geojson"
+	src := "../testdata/neighborhood_names_gis.geojson"
 	dst := "/vsimem/test_convert_vector.gpkg"
 	// /vsimem/ entries are freed when the test process exits; the
 	// lukeroth/gdal binding doesn't wrap VSIUnlink so we let GC + EOL
 	// cleanup handle it. WithVectorOverwrite() above makes the test
 	// re-runnable in -count=N mode.
 
-	if err := gismanager.ConvertVector(context.Background(), src, dst,
-		gismanager.WithVectorFormat("GPKG"),
-		gismanager.WithVectorOverwrite(),
+	if err := convert.ConvertVector(context.Background(), src, dst,
+		convert.WithVectorFormat("GPKG"),
+		convert.WithVectorOverwrite(),
 	); err != nil {
 		t.Fatalf("ConvertVector to /vsimem/: %v", err)
 	}

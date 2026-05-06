@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -8,18 +8,21 @@ import (
 	"strings"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
-// VectorConvertOption configures a [ConvertVector] call. Construct via
+// VectorOption configures a [ConvertVector] call. Construct via
 // the [WithVector*] helpers below; pass any number of options in any
 // order. Each helper mutates a private config struct; nil options are
 // tolerated.
 //
 // The pattern matches v1.1's manager [Option] precedent — functional
 // options for additive growth without breaking the public surface.
-type VectorConvertOption func(*vectorConvertConfig)
+type VectorOption func(*vectorConfig)
 
-type vectorConvertConfig struct {
+type vectorConfig struct {
 	logger       *slog.Logger
 	format       string
 	sourceSRS    string
@@ -37,8 +40,8 @@ type vectorBBox struct {
 	MinX, MinY, MaxX, MaxY float64
 }
 
-func newVectorConvertConfig(opts []VectorConvertOption) *vectorConvertConfig {
-	c := &vectorConvertConfig{logger: GetLogger()}
+func newVectorConfig(opts []VectorOption) *vectorConfig {
+	c := &vectorConfig{logger: slogx.Default()}
 	for _, o := range opts {
 		if o != nil {
 			o(c)
@@ -49,11 +52,11 @@ func newVectorConvertConfig(opts []VectorConvertOption) *vectorConvertConfig {
 
 // WithVectorLogger sets the structured logger used for diagnostic output
 // during conversion. Passing nil falls back to the default logger from
-// [GetLogger]. Mirrors v1.1's [WithLogger] semantics for the manager.
-func WithVectorLogger(l *slog.Logger) VectorConvertOption {
-	return func(c *vectorConvertConfig) {
+// [slogx.Default]. Mirrors v1.1's [WithLogger] semantics for the manager.
+func WithVectorLogger(l *slog.Logger) VectorOption {
+	return func(c *vectorConfig) {
 		if l == nil {
-			c.logger = GetLogger()
+			c.logger = slogx.Default()
 			return
 		}
 		c.logger = l
@@ -64,31 +67,31 @@ func WithVectorLogger(l *slog.Logger) VectorConvertOption {
 // "GeoJSON", "FlatGeobuf", "ESRI Shapefile", "KML"). Maps to ogr2ogr's
 // `-f` flag. When empty, GDAL infers the driver from the destination
 // path's extension.
-func WithVectorFormat(driverName string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.format = driverName }
+func WithVectorFormat(driverName string) VectorOption {
+	return func(c *vectorConfig) { c.format = driverName }
 }
 
 // WithVectorSourceSRS overrides the input CRS. Accepts any GDAL
 // SetFromUserInput-friendly form ("EPSG:4326", "+proj=longlat ...",
 // well-known WKT). Use only when the source has a missing or wrong CRS.
 // Maps to ogr2ogr's `-s_srs`.
-func WithVectorSourceSRS(srs string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.sourceSRS = srs }
+func WithVectorSourceSRS(srs string) VectorOption {
+	return func(c *vectorConfig) { c.sourceSRS = srs }
 }
 
 // WithVectorTargetSRS reprojects features to the given CRS during the
 // conversion. The most common use is `WithVectorTargetSRS("EPSG:3857")`
 // for web tile pipelines. Maps to ogr2ogr's `-t_srs`.
-func WithVectorTargetSRS(srs string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.targetSRS = srs }
+func WithVectorTargetSRS(srs string) VectorOption {
+	return func(c *vectorConfig) { c.targetSRS = srs }
 }
 
 // WithVectorBoundingBox restricts output to features intersecting the
 // given bounding box. Coordinates are in the *source* CRS unless
 // [WithVectorSourceSRS] also reinterprets them. Maps to ogr2ogr's
 // `-spat`.
-func WithVectorBoundingBox(minX, minY, maxX, maxY float64) VectorConvertOption {
-	return func(c *vectorConvertConfig) {
+func WithVectorBoundingBox(minX, minY, maxX, maxY float64) VectorOption {
+	return func(c *vectorConfig) {
 		c.bbox = &vectorBBox{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}
 	}
 }
@@ -96,44 +99,44 @@ func WithVectorBoundingBox(minX, minY, maxX, maxY float64) VectorConvertOption {
 // WithVectorWhere restricts output to features matching the given OGR
 // SQL WHERE expression (without the `WHERE` keyword), e.g.
 // `"CONTINENT = 'Africa'"`. Maps to ogr2ogr's `-where`.
-func WithVectorWhere(sql string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.where = sql }
+func WithVectorWhere(sql string) VectorOption {
+	return func(c *vectorConfig) { c.where = sql }
 }
 
 // WithVectorSimplify applies Douglas-Peucker simplification with the
 // given tolerance (in target-CRS units). Useful for thinning vector
 // data before web delivery. Maps to ogr2ogr's `-simplify`.
-func WithVectorSimplify(tolerance float64) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.simplifyTol = tolerance }
+func WithVectorSimplify(tolerance float64) VectorOption {
+	return func(c *vectorConfig) { c.simplifyTol = tolerance }
 }
 
 // WithVectorSelectFields restricts the output to the named attribute
 // fields. The geometry column is always preserved. Maps to ogr2ogr's
 // `-select`.
-func WithVectorSelectFields(fields ...string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.selectFields = append([]string(nil), fields...) }
+func WithVectorSelectFields(fields ...string) VectorOption {
+	return func(c *vectorConfig) { c.selectFields = append([]string(nil), fields...) }
 }
 
 // WithVectorLayerName renames the destination layer (e.g. forces a
 // different table name when copying to PostGIS or a different layer
 // name in GPKG). Maps to ogr2ogr's `-nln`.
-func WithVectorLayerName(name string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.layerName = name }
+func WithVectorLayerName(name string) VectorOption {
+	return func(c *vectorConfig) { c.layerName = name }
 }
 
 // WithVectorOverwrite replaces an existing destination layer instead of
 // failing with a "layer already exists" error. Maps to ogr2ogr's
 // `-overwrite`.
-func WithVectorOverwrite() VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.overwrite = true }
+func WithVectorOverwrite() VectorOption {
+	return func(c *vectorConfig) { c.overwrite = true }
 }
 
 // WithVectorRawOptions appends raw `ogr2ogr`-style flags to the
 // generated argument list, after every other option. Use this to reach
 // flags the typed helpers do not yet expose (e.g. `-lco`, `-skipfailures`,
 // `-nlt`). Each entry is one CLI token.
-func WithVectorRawOptions(args ...string) VectorConvertOption {
-	return func(c *vectorConvertConfig) { c.rawOptions = append(c.rawOptions, args...) }
+func WithVectorRawOptions(args ...string) VectorOption {
+	return func(c *vectorConfig) { c.rawOptions = append(c.rawOptions, args...) }
 }
 
 // ConvertVector converts the vector source at src into dst, applying any
@@ -156,28 +159,28 @@ func WithVectorRawOptions(args ...string) VectorConvertOption {
 //     the source); the underlying CGo call is synchronous and
 //     uninterruptible — long conversions cannot be cancelled mid-way.
 //
-// Errors are wrapped with [ErrConvertFailed]; recover the underlying
+// Errors are wrapped with [errs.ErrConvertFailed]; recover the underlying
 // GDAL error via [errors.As] into [*GISError].
 //
 // Driver names supplied via [WithVectorFormat] are validated against
 // the running GDAL build before the C call, so an unknown driver
-// surfaces as a clean ErrConvertFailed rather than the upstream
+// surfaces as a clean errs.ErrConvertFailed rather than the upstream
 // silent-fail-with-stderr-warning behavior.
-func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOption) error {
+func ConvertVector(ctx context.Context, src, dst string, opts ...VectorOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	cfg := newVectorConvertConfig(opts)
+	cfg := newVectorConfig(opts)
 
 	if err := validateGDALDriver(cfg.format); err != nil {
 		cfg.logger.Error("ConvertVector: invalid format", "format", cfg.format, "err", err)
-		return newGISError("ConvertVector", src, ErrConvertFailed, err)
+		return errs.NewGISError("ConvertVector", src, errs.ErrConvertFailed, err)
 	}
 
 	srcDS, err := gdal.OpenEx(src, gdal.OFVector|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("ConvertVector: open source", "src", src, "err", err)
-		return newGISError("ConvertVector", src, ErrConvertFailed, err)
+		return errs.NewGISError("ConvertVector", src, errs.ErrConvertFailed, err)
 	}
 	defer srcDS.Close()
 
@@ -187,8 +190,8 @@ func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOp
 
 	out, vErr := gdal.VectorTranslate(dst, []gdal.Dataset{srcDS}, args)
 	if vErr != nil {
-		return newGISError("ConvertVector", fmt.Sprintf("%s -> %s", src, dst),
-			ErrConvertFailed, vErr)
+		return errs.NewGISError("ConvertVector", fmt.Sprintf("%s -> %s", src, dst),
+			errs.ErrConvertFailed, vErr)
 	}
 	defer out.Close()
 	return nil
@@ -197,7 +200,7 @@ func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOp
 // buildVectorTranslateArgs renders cfg into the []string ogr2ogr-style
 // arg list GDALVectorTranslate expects. Unit-tested separately so the
 // option->arg mapping is locked in without needing CGo.
-func buildVectorTranslateArgs(cfg *vectorConvertConfig) []string {
+func buildVectorTranslateArgs(cfg *vectorConfig) []string {
 	var args []string
 	if cfg.format != "" {
 		args = append(args, "-f", cfg.format)

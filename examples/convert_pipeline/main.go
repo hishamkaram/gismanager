@@ -17,7 +17,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 func main() {
@@ -29,14 +29,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := gismanager.ConvertVector(context.Background(), *in, *out,
-		gismanager.WithVectorFormat("GPKG"),
-		gismanager.WithVectorOverwrite(),
-		gismanager.WithVectorTargetSRS("EPSG:3857"),
-		gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
-		gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
-		gismanager.WithVectorLayerName("africa"),
-		gismanager.WithVectorSimplify(100),
+	if err := convert.ConvertVector(context.Background(), *in, *out,
+		convert.WithVectorFormat("GPKG"),
+		convert.WithVectorOverwrite(),
+		convert.WithVectorTargetSRS("EPSG:3857"),
+		convert.WithVectorBoundingBox(-25, -40, 60, 40),
+		convert.WithVectorWhere("CONTINENT = 'Africa'"),
+		convert.WithVectorLayerName("africa"),
+		convert.WithVectorSimplify(100),
 	); err != nil {
 		slog.Error("convert", "err", err)
 		os.Exit(1)

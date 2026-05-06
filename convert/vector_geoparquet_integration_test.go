@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package convert_test
 
 // Integration test for the v1.4 GeoParquet support. Exercises the
 // full read/write contract: writes a GeoParquet from the tracked
@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/convert"
 )
 
 // TestConvertVector_GeoParquetRoundTrip_Integration round-trips a
@@ -27,7 +28,7 @@ import (
 // "Parquet" format, and (c) OpenSource dispatches the .parquet
 // extension to the right driver.
 func TestConvertVector_GeoParquetRoundTrip_Integration(t *testing.T) {
-	src := "./testdata/neighborhood_names_gis.geojson"
+	src := "../testdata/neighborhood_names_gis.geojson"
 	parquetPath := "/vsimem/test_geoparquet_roundtrip.parquet"
 
 	// 1. Source-side baseline: count features in the GeoJSON.
@@ -50,9 +51,9 @@ func TestConvertVector_GeoParquetRoundTrip_Integration(t *testing.T) {
 	}
 
 	// 2. Convert GeoJSON -> GeoParquet via the new format support.
-	if err := gismanager.ConvertVector(context.Background(), src, parquetPath,
-		gismanager.WithVectorFormat(parquetDriverName),
-		gismanager.WithVectorOverwrite(),
+	if err := convert.ConvertVector(context.Background(), src, parquetPath,
+		convert.WithVectorFormat(parquetDriverName),
+		convert.WithVectorOverwrite(),
 	); err != nil {
 		t.Fatalf("ConvertVector to GeoParquet: %v", err)
 	}
@@ -80,9 +81,9 @@ func TestConvertVector_GeoParquetRoundTrip_Integration(t *testing.T) {
 	t.Logf("GeoParquet round-trip ok: %d features", dstCount)
 }
 
-// parquetDriverName mirrors the unexported [parquetDriver] constant
-// without exposing it. We can't reach the unexported name from this
-// `gismanager_test` package, so we duplicate the string here. If a
-// future PR exports the driver-name constants (a v2 change), this
-// duplication goes away.
+// parquetDriverName mirrors the unexported [gismanager.parquetDriver]
+// constant without exposing it. We can't reach the unexported name from
+// this external `convert_test` package, so we duplicate the string
+// here. If a future PR exports the driver-name constants (a v2 change),
+// this duplication goes away.
 const parquetDriverName = "Parquet"

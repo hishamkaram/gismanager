@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestBuildRasterizeArgs(t *testing.T) {
@@ -134,12 +136,12 @@ func TestRasterize_CtxCancelledFailsFast(t *testing.T) {
 
 func TestRasterize_OpenError_WrapsErrConvertFailed(t *testing.T) {
 	err := Rasterize(context.Background(),
-		"./testdata/__definitely_does_not_exist__.geojson",
+		"../testdata/__definitely_does_not_exist__.geojson",
 		"/tmp/should_not_be_created.tif")
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "Rasterize", gerr.Op)
 }

@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 func TestBuildVRTArgs(t *testing.T) {
@@ -111,9 +113,9 @@ func TestBuildVRT_CtxCancelledFailsFast(t *testing.T) {
 func TestBuildVRT_RejectsEmptySources(t *testing.T) {
 	err := BuildVRT(context.Background(), "/tmp/out.vrt", nil)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "BuildVRT", gerr.Op)
 }
@@ -121,11 +123,11 @@ func TestBuildVRT_RejectsEmptySources(t *testing.T) {
 func TestBuildVRT_OpenError_WrapsErrConvertFailed(t *testing.T) {
 	err := BuildVRT(context.Background(),
 		"/tmp/should_not_be_created.vrt",
-		[]string{"./testdata/__definitely_does_not_exist__.tif"})
+		[]string{"../testdata/__definitely_does_not_exist__.tif"})
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConvertFailed))
+	assert.True(t, errors.Is(err, errs.ErrConvertFailed))
 
-	var gerr *GISError
+	var gerr *errs.GISError
 	assert.True(t, errors.As(err, &gerr))
 	assert.Equal(t, "BuildVRT", gerr.Op)
 }

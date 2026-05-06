@@ -1,4 +1,4 @@
-package gismanager
+package convert
 
 import (
 	"context"
@@ -7,6 +7,9 @@ import (
 	"strconv"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
 // RasterizeOption configures a [Rasterize] call. Construct via the
@@ -35,7 +38,7 @@ type rasterizeConfig struct {
 }
 
 func newRasterizeConfig(opts []RasterizeOption) *rasterizeConfig {
-	c := &rasterizeConfig{logger: GetLogger()}
+	c := &rasterizeConfig{logger: slogx.Default()}
 	for _, o := range opts {
 		if o != nil {
 			o(c)
@@ -45,11 +48,11 @@ func newRasterizeConfig(opts []RasterizeOption) *rasterizeConfig {
 }
 
 // WithRasterizeLogger sets the structured logger used during rasterization.
-// nil falls back to [GetLogger].
+// nil falls back to [slogx.Default].
 func WithRasterizeLogger(l *slog.Logger) RasterizeOption {
 	return func(c *rasterizeConfig) {
 		if l == nil {
-			c.logger = GetLogger()
+			c.logger = slogx.Default()
 			return
 		}
 		c.logger = l
@@ -158,7 +161,7 @@ func WithRasterizeRawOptions(args ...string) RasterizeOption {
 // units) or [WithRasterizeOutputSize] (pixel dimensions). Without
 // either, GDAL chooses an arbitrary 256x256 default.
 //
-// Errors are wrapped with [ErrConvertFailed]; recover via
+// Errors are wrapped with [errs.ErrConvertFailed]; recover via
 // [errors.As] into [*GISError]. The Op field is "Rasterize".
 //
 // Same binding gaps documented on [ConvertVector] apply: ctx is
@@ -172,13 +175,13 @@ func Rasterize(ctx context.Context, vectorSrc, rasterDst string, opts ...Rasteri
 
 	if err := validateGDALDriver(cfg.format); err != nil {
 		cfg.logger.Error("Rasterize: invalid format", "format", cfg.format, "err", err)
-		return newGISError("Rasterize", vectorSrc, ErrConvertFailed, err)
+		return errs.NewGISError("Rasterize", vectorSrc, errs.ErrConvertFailed, err)
 	}
 
 	srcDS, err := gdal.OpenEx(vectorSrc, gdal.OFVector|gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		cfg.logger.Error("Rasterize: open source", "src", vectorSrc, "err", err)
-		return newGISError("Rasterize", vectorSrc, ErrConvertFailed, err)
+		return errs.NewGISError("Rasterize", vectorSrc, errs.ErrConvertFailed, err)
 	}
 	defer srcDS.Close()
 
@@ -188,8 +191,8 @@ func Rasterize(ctx context.Context, vectorSrc, rasterDst string, opts ...Rasteri
 
 	out, rErr := gdal.Rasterize(rasterDst, srcDS, args)
 	if rErr != nil {
-		return newGISError("Rasterize", fmt.Sprintf("%s -> %s", vectorSrc, rasterDst),
-			ErrConvertFailed, rErr)
+		return errs.NewGISError("Rasterize", fmt.Sprintf("%s -> %s", vectorSrc, rasterDst),
+			errs.ErrConvertFailed, rErr)
 	}
 	defer out.Close()
 	return nil
