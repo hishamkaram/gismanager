@@ -165,7 +165,7 @@ func ConvertRaster(ctx context.Context, src, dst string, opts ...RasterConvertOp
 		return newGISError("ConvertRaster", fmt.Sprintf("%s -> %s", src, dst),
 			ErrConvertFailed, tErr)
 	}
-	out.Close()
+	defer out.Close()
 	return nil
 }
 

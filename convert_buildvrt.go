@@ -186,7 +186,7 @@ func BuildVRT(ctx context.Context, dst string, srcs []string, opts ...VRTOption)
 	if vErr != nil {
 		return newGISError("BuildVRT", dst, ErrConvertFailed, vErr)
 	}
-	out.Close()
+	defer out.Close()
 	return nil
 }
 

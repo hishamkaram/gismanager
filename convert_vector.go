@@ -190,7 +190,7 @@ func ConvertVector(ctx context.Context, src, dst string, opts ...VectorConvertOp
 		return newGISError("ConvertVector", fmt.Sprintf("%s -> %s", src, dst),
 			ErrConvertFailed, vErr)
 	}
-	out.Close()
+	defer out.Close()
 	return nil
 }
 
