@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -12,17 +12,20 @@ import (
 	"github.com/hishamkaram/geoserver/v2/rest/featuretypes"
 	"github.com/hishamkaram/geoserver/v2/rest/workspaces"
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/internal/slogx"
 )
 
-// GdalLayer wraps a *gdal.Layer with the helper methods gismanager uses
+// Layer wraps a *gdal.Layer with the helper methods gismanager uses
 // (publish, copy-to-PostGIS, schema introspection).
 //
 // The logger field is intentionally lowercase: callers should construct
-// GdalLayers via [(*ManagerConfig).NewLayer] so the manager's configured
+// GdalLayers via [(*Manager).NewLayer] so the manager's configured
 // logger is stamped on automatically. The zero-value form
-// (`GdalLayer{Layer: l}`) is still supported for back-compat — methods
-// that need a logger fall back to [GetLogger] when the field is nil.
-type GdalLayer struct {
+// (`Layer{Layer: l}`) is still supported for back-compat — methods
+// that need a logger fall back to [slogx.Default] when the field is nil.
+type Layer struct {
 	*gdal.Layer
 	logger *slog.Logger
 }
@@ -32,17 +35,17 @@ type GdalLayer struct {
 // over the zero-value form so per-manager logger configuration
 // (custom handler, attached attrs, etc.) reaches the layer's helper
 // methods.
-func (manager *ManagerConfig) NewLayer(l *gdal.Layer) *GdalLayer {
-	return &GdalLayer{Layer: l, logger: manager.logger}
+func (manager *Manager) NewLayer(l *gdal.Layer) *Layer {
+	return &Layer{Layer: l, logger: manager.logger}
 }
 
 // loggerOrDefault returns the layer's stamped logger or, if nil, the
 // project default. Used by methods that emit structured logs but
 // must keep working on zero-value GdalLayers from pre-NewLayer
 // callers.
-func (layer *GdalLayer) loggerOrDefault() *slog.Logger {
+func (layer *Layer) loggerOrDefault() *slog.Logger {
 	if layer == nil || layer.logger == nil {
-		return GetLogger()
+		return slogx.Default()
 	}
 	return layer.logger
 }
@@ -63,26 +66,26 @@ type LayerField struct {
 // feature type, ensuring the configured workspace and PostGIS datastore
 // exist first.
 //
-// Errors are wrapped with [ErrGeoServerPublish]; the underlying
+// Errors are wrapped with [errs.ErrGeoServerPublish]; the underlying
 // *geoserver.APIError is recoverable via [errors.As] for fields and
 // [errors.Is] against the v2 sentinels (e.g. ErrConflict, ErrServerError).
-func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *GdalLayer) error {
+func (manager *Manager) PublishGeoserverLayer(ctx context.Context, layer *Layer) error {
 	catalog, err := manager.GetGeoserverCatalog()
 	if err != nil {
 		manager.logger.Error("build geoserver client", "err", err)
-		return newGISError("PublishGeoserverLayer", "", ErrGeoServerPublish, err)
+		return errs.NewGISError("PublishGeoserverLayer", "", errs.ErrGeoServerPublish, err)
 	}
 
 	ws := manager.Geoserver.WorkspaceName
 	if err := ensureWorkspace(ctx, catalog, ws); err != nil {
 		manager.logger.Error("ensure workspace", "workspace", ws, "err", err)
-		return newGISError("PublishGeoserverLayer", ws, ErrGeoServerPublish, err)
+		return errs.NewGISError("PublishGeoserverLayer", ws, errs.ErrGeoServerPublish, err)
 	}
 
 	dsName := manager.Datastore.Name
 	if err := ensureDatastore(ctx, catalog, ws, manager.Datastore); err != nil {
 		manager.logger.Error("ensure datastore", "workspace", ws, "datastore", dsName, "err", err)
-		return newGISError("PublishGeoserverLayer", ws+"/"+dsName, ErrGeoServerPublish, err)
+		return errs.NewGISError("PublishGeoserverLayer", ws+"/"+dsName, errs.ErrGeoServerPublish, err)
 	}
 
 	layerName := layer.Name()
@@ -94,7 +97,7 @@ func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
 		manager.logger.Error("get feature type", "workspace", ws, "datastore", dsName, "layer", layerName, "err", err)
-		return newGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, ErrGeoServerPublish, err)
+		return errs.NewGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, errs.ErrGeoServerPublish, err)
 	}
 	ft := &featuretypes.FeatureType{
 		Name:       layerName,
@@ -103,19 +106,19 @@ func (manager *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *
 	}
 	if err := scoped.Create(ctx, ft); err != nil {
 		manager.logger.Error("publish feature type", "workspace", ws, "datastore", dsName, "layer", layerName, "err", err)
-		return newGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, ErrGeoServerPublish, err)
+		return errs.NewGISError("PublishGeoserverLayer", ws+"/"+dsName+"/"+layerName, errs.ErrGeoServerPublish, err)
 	}
 	return nil
 }
 
 // ensureWorkspace looks up the GeoServer workspace by name and creates it
-// if missing. Errors are wrapped as *GISError with Op="ensureWorkspace"
-// and Sentinel=ErrGeoServerPublish so that errors.Is(...,
-// ErrGeoServerPublish) succeeds at every layer of the chain and the
+// if missing. Errors are wrapped as *errs.GISError with Op="ensureWorkspace"
+// and Sentinel=errs.ErrGeoServerPublish so that errors.Is(...,
+// errs.ErrGeoServerPublish) succeeds at every layer of the chain and the
 // underlying *geoserver.APIError remains recoverable via errors.As.
 // Callers (notably PublishGeoserverLayer) typically re-wrap the returned
-// *GISError with their own Op for the public-facing error envelope; the
-// inner GISError remains reachable via Unwrap for finer-grained triage.
+// *errs.GISError with their own Op for the public-facing error envelope; the
+// inner errs.GISError remains reachable via Unwrap for finer-grained triage.
 //
 // Concurrent-call safety: when N goroutines all hit the Get-not-found
 // branch simultaneously, only the first Create wins; the rest receive
@@ -128,13 +131,13 @@ func ensureWorkspace(ctx context.Context, c *geoserver.Client, name string) erro
 	if _, err := c.Workspaces.Get(ctx, name); err == nil {
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
-		return newGISError("ensureWorkspace", name, ErrGeoServerPublish, err)
+		return errs.NewGISError("ensureWorkspace", name, errs.ErrGeoServerPublish, err)
 	}
 	if err := c.Workspaces.Create(ctx, &workspaces.Workspace{Name: name}); err != nil {
 		if errors.Is(err, geoserver.ErrConflict) {
 			return nil
 		}
-		return newGISError("ensureWorkspace", name, ErrGeoServerPublish, err)
+		return errs.NewGISError("ensureWorkspace", name, errs.ErrGeoServerPublish, err)
 	}
 	return nil
 }
@@ -142,14 +145,14 @@ func ensureWorkspace(ctx context.Context, c *geoserver.Client, name string) erro
 // ensureDatastore looks up the PostGIS-backed datastore in the given
 // workspace and creates it if missing. Same error-wrapping contract and
 // same concurrent-create idempotency (ErrConflict treated as success)
-// as [ensureWorkspace] — errors are *GISError with Op="ensureDatastore"
-// and Sentinel=ErrGeoServerPublish.
+// as [ensureWorkspace] — errors are *errs.GISError with Op="ensureDatastore"
+// and Sentinel=errs.ErrGeoServerPublish.
 func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds DatastoreConfig) error {
 	scoped := c.Datastores.InWorkspace(ws)
 	if _, err := scoped.Get(ctx, ds.Name); err == nil {
 		return nil
 	} else if !errors.Is(err, geoserver.ErrNotFound) {
-		return newGISError("ensureDatastore", ds.Name, ErrGeoServerPublish, err)
+		return errs.NewGISError("ensureDatastore", ds.Name, errs.ErrGeoServerPublish, err)
 	}
 	conn := datastores.PostGIS{
 		Name:     ds.Name,
@@ -163,7 +166,7 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 		if errors.Is(err, geoserver.ErrConflict) {
 			return nil
 		}
-		return newGISError("ensureDatastore", ds.Name, ErrGeoServerPublish, err)
+		return errs.NewGISError("ensureDatastore", ds.Name, errs.ErrGeoServerPublish, err)
 	}
 	return nil
 }
@@ -173,21 +176,21 @@ func ensureDatastore(ctx context.Context, c *geoserver.Client, ws string, ds Dat
 // preserving the geometry column name and optionally overwriting an existing
 // table of the same name.
 //
-// Returns errors wrapping [ErrPostGISConnect] (PostGIS unreachable),
-// [ErrInvalidDatasource] (nil targetSource), or [ErrInvalidLayer] (nil
+// Returns errors wrapping [errs.ErrPostGISConnect] (PostGIS unreachable),
+// [errs.ErrInvalidDatasource] (nil targetSource), or [errs.ErrInvalidLayer] (nil
 // embedded *gdal.Layer). Match via [errors.Is].
-func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *ManagerConfig, overwrite bool) (newLayer *GdalLayer, err error) {
+func (layer *Layer) LayerToPostgis(targetSource *gdal.DataSource, manager *Manager, overwrite bool) (newLayer *Layer, err error) {
 	connStr := manager.Datastore.PostgresConnectionString()
 	if dbErr := DBIsAlive("postgres", connStr); dbErr != nil {
-		err = newGISError("LayerToPostgis", manager.Datastore.Name, ErrPostGISConnect, dbErr)
+		err = errs.NewGISError("LayerToPostgis", manager.Datastore.Name, errs.ErrPostGISConnect, dbErr)
 		return
 	}
 	if targetSource == nil {
-		err = newGISError("LayerToPostgis", "", ErrInvalidDatasource, nil)
+		err = errs.NewGISError("LayerToPostgis", "", errs.ErrInvalidDatasource, nil)
 		return
 	}
 	if layer.Layer == nil {
-		err = newGISError("LayerToPostgis", "", ErrInvalidLayer, nil)
+		err = errs.NewGISError("LayerToPostgis", "", errs.ErrInvalidLayer, nil)
 		return
 	}
 	datasource := *targetSource
@@ -200,7 +203,7 @@ func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *M
 		options = append(options, "OVERWRITE=YES")
 	}
 	innerLayer := datasource.CopyLayer(*layer.Layer, layer.Name(), options)
-	newLayer = &GdalLayer{
+	newLayer = &Layer{
 		Layer: &innerLayer,
 	}
 	return
@@ -209,7 +212,7 @@ func (layer *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, manager *M
 // GeometryName returns the OGR geometry-type name for this layer
 // ("POINT", "LINESTRING", etc.), defaulting to "geom" if the layer has
 // no geometry column.
-func (layer *GdalLayer) GeometryName() string {
+func (layer *Layer) GeometryName() string {
 	geom := gdal.Create(layer.Type())
 	name := geom.Name()
 	if name == "" {
@@ -223,11 +226,11 @@ func (layer *GdalLayer) GeometryName() string {
 // Deprecated: typo (missing 'e' in "Geometry"). Use [GeometryName],
 // which is byte-for-byte identical in behaviour. The typo'd form is
 // kept for v1.x back-compat and will be removed at v2.
-func (layer *GdalLayer) GetGeomtryName() string { return layer.GeometryName() }
+func (layer *Layer) GetGeomtryName() string { return layer.GeometryName() }
 
 // GetLayerSchema returns the layer's geometry column followed by every
 // attribute field, each as a LayerField with name + OGR type.
-func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
+func (layer *Layer) GetLayerSchema() (fields []*LayerField) {
 	if layer.Layer != nil {
 		layerDef := layer.Definition()
 		geomName := layer.GeometryColumn()
@@ -254,9 +257,9 @@ func (layer *GdalLayer) GetLayerSchema() (fields []*LayerField) {
 //
 // Deprecated: leaks gdal.Feature handles — each feature in the returned
 // slice owns a C-level handle that must be released via [gdal.Feature.Destroy],
-// which the slice form makes easy to forget. Use [(*GdalLayer).Features]
+// which the slice form makes easy to forget. Use [(*Layer).Features]
 // which destroys each feature as iteration advances and on early break.
-func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
+func (layer *Layer) GetFeatures() (features []*gdal.Feature) {
 	logger := layer.loggerOrDefault()
 	if layer.Layer != nil {
 		count, ok := layer.FeatureCount(true)
@@ -286,7 +289,7 @@ func (layer *GdalLayer) GetFeatures() (features []*gdal.Feature) {
 // Returns an empty iteration if the embedded *gdal.Layer is nil or
 // FeatureCount fails (the manager's logger gets an Error record in the
 // FeatureCount-failure case).
-func (layer *GdalLayer) Features(ctx context.Context) iter.Seq[gdal.Feature] {
+func (layer *Layer) Features(ctx context.Context) iter.Seq[gdal.Feature] {
 	logger := layer.loggerOrDefault()
 	return func(yield func(gdal.Feature) bool) {
 		if layer == nil || layer.Layer == nil {

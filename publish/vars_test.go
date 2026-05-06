@@ -1,9 +1,9 @@
-package gismanager
+package publish
 
 import "testing"
 
 // TestPgRegex_Matches and TestPgRegex_DoesNotMatch lock in the
-// PostgreSQL connection-string detection used by [(*ManagerConfig).GetDriver]
+// PostgreSQL connection-string detection used by [(*Manager).GetDriver]
 // to choose between the OGR PG driver and a file-extension dispatch.
 // driver_table_test.go's TestGetDriver_Table exercises this regex
 // indirectly via the public GetDriver path; the focused tests here

@@ -1,4 +1,4 @@
-package gismanager_test
+package publish_test
 
 // Runnable godoc examples for the publish-pipeline surface. The
 // PublishAll example demonstrates wiring without making real network
@@ -11,10 +11,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/publish"
 )
 
-// ExampleManagerConfig_PublishAll demonstrates the high-level publish
+// ExampleManager_PublishAll demonstrates the high-level publish
 // flow: walk a source directory, load every supported GIS file into
 // the configured PostGIS datastore, then publish each as a GeoServer
 // feature type.
@@ -30,15 +30,15 @@ import (
 // — godoc tests would otherwise try to make a real GeoServer / PostGIS
 // connection. The integration suite (//go:build integration) covers
 // the runtime contract end-to-end.
-func ExampleManagerConfig_PublishAll() {
-	mgr, err := gismanager.New(
-		gismanager.WithGeoserver(gismanager.GeoserverConfig{
+func ExampleManager_PublishAll() {
+	mgr, err := publish.New(
+		publish.WithGeoserver(publish.GeoserverConfig{
 			ServerURL:     "http://localhost:8080/geoserver",
 			Username:      "admin",
 			Password:      "geoserver",
 			WorkspaceName: "demo",
 		}),
-		gismanager.WithDatastore(gismanager.DatastoreConfig{
+		publish.WithDatastore(publish.DatastoreConfig{
 			Host:   "localhost",
 			Port:   5432,
 			DBName: "gis",
@@ -46,7 +46,7 @@ func ExampleManagerConfig_PublishAll() {
 			DBPass: "postgres",
 			Name:   "gismanager_demo",
 		}),
-		gismanager.WithSource(gismanager.SourceConfig{Path: "./gis-data"}),
+		publish.WithSource(publish.SourceConfig{Path: "./gis-data"}),
 	)
 	if err != nil {
 		fmt.Println("construct manager:", err)
@@ -60,12 +60,12 @@ func ExampleManagerConfig_PublishAll() {
 	fmt.Println("published")
 }
 
-// ExampleManagerConfig_OpenSource shows the read-only inspection
+// ExampleManager_OpenSource shows the read-only inspection
 // surface: open a GIS file via the configured GDAL OGR driver and
 // list layer count. No PostGIS or GeoServer is touched.
-func ExampleManagerConfig_OpenSource() {
-	mgr, err := gismanager.New(
-		gismanager.WithSource(gismanager.SourceConfig{Path: "./testdata"}),
+func ExampleManager_OpenSource() {
+	mgr, err := publish.New(
+		publish.WithSource(publish.SourceConfig{Path: "../testdata"}),
 	)
 	if err != nil {
 		fmt.Println("construct manager:", err)
@@ -73,7 +73,7 @@ func ExampleManagerConfig_OpenSource() {
 	}
 
 	ds, err := mgr.OpenSource(context.Background(),
-		"./testdata/sample.gpkg", 0)
+		"../testdata/sample.gpkg", 0)
 	if err != nil {
 		fmt.Println("open:", err)
 		return

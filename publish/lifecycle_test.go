@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -10,15 +10,15 @@ import (
 )
 
 // TestFeatures_NilLayer_YieldsNothing locks in the zero-value safety:
-// iterating Features on a GdalLayer whose embedded *gdal.Layer is nil
+// iterating Features on a Layer whose embedded *gdal.Layer is nil
 // must produce zero items and not panic.
 func TestFeatures_NilLayer_YieldsNothing(t *testing.T) {
-	zero := &GdalLayer{}
+	zero := &Layer{}
 	count := 0
 	for range zero.Features(context.Background()) {
 		count++
 	}
-	assert.Equal(t, 0, count, "Features on nil-Layer GdalLayer must yield zero items")
+	assert.Equal(t, 0, count, "Features on nil-Layer Layer must yield zero items")
 }
 
 // TestFeatures_HonorsCanceledContext locks in cancellation: a ctx that
@@ -27,7 +27,7 @@ func TestFeatures_NilLayer_YieldsNothing(t *testing.T) {
 func TestFeatures_HonorsCanceledContext(t *testing.T) {
 	// Use a real layer fixture from testdata — Features needs a non-nil
 	// *gdal.Layer to reach the ctx.Err() check inside the loop.
-	mgr, err := New(WithSource(SourceConfig{Path: "./testdata"}))
+	mgr, err := New(WithSource(SourceConfig{Path: "../testdata"}))
 	assert.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

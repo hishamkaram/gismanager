@@ -1,10 +1,12 @@
-package gismanager
+package publish
 
 import (
 	"errors"
 	"testing"
 
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 // TestGetDriver_Table is the table-driven canonical test for the
@@ -21,7 +23,7 @@ func TestGetDriver_Table(t *testing.T) {
 	cases := []struct {
 		name       string
 		path       string
-		wantDriver string // empty → expect ErrUnsupportedFormat
+		wantDriver string // empty → expect errs.ErrUnsupportedFormat
 	}{
 		// --- supported extensions, lowercase ---
 		{name: "geopackage", path: "data/sample.gpkg", wantDriver: geopackageDriver},
@@ -66,8 +68,8 @@ func TestGetDriver_Table(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			drv, err := mgr.GetDriver(tc.path)
 			if tc.wantDriver == "" {
-				if !errors.Is(err, ErrUnsupportedFormat) {
-					t.Fatalf("expected ErrUnsupportedFormat, got %v", err)
+				if !errors.Is(err, errs.ErrUnsupportedFormat) {
+					t.Fatalf("expected errs.ErrUnsupportedFormat, got %v", err)
 				}
 				if drv != (gdal.OGRDriver{}) {
 					t.Errorf("expected zero-value OGRDriver on error, got %#v", drv)

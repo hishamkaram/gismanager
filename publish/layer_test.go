@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 )
 
 func TestGetFeatures(t *testing.T) {
-	manager, _ := FromConfig("./testdata/test_config.yml")
+	manager, _ := FromConfig("../testdata/test_config.yml")
 	files, _ := GetGISFiles(manager.Source.Path)
 	source, _ := manager.OpenSource(context.Background(), files[0], 1)
 	layer := source.LayerByIndex(0)
-	gLayer := GdalLayer{
+	gLayer := Layer{
 		Layer: &layer,
 	}
 	count, _ := layer.FeatureCount(true)
@@ -22,11 +22,11 @@ func TestGetFeatures(t *testing.T) {
 }
 
 func TestGetLayerSchema(t *testing.T) {
-	manager, _ := FromConfig("./testdata/test_config.yml")
+	manager, _ := FromConfig("../testdata/test_config.yml")
 	files, _ := GetGISFiles(manager.Source.Path)
 	source, _ := manager.OpenSource(context.Background(), files[0], 1)
 	layer := source.LayerByIndex(0)
-	gLayer := GdalLayer{
+	gLayer := Layer{
 		Layer: &layer,
 	}
 	fields := gLayer.GetLayerSchema()

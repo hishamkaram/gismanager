@@ -1,6 +1,6 @@
 //go:build integration
 
-package gismanager_test
+package publish_test
 
 import (
 	"context"
@@ -15,14 +15,15 @@ import (
 	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/hishamkaram/geoserver/v2/rest/workspaces"
 
-	"github.com/hishamkaram/gismanager"
+	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/publish"
 )
 
-// integrationConfig builds a *gismanager.ManagerConfig from the environment.
+// integrationConfig builds a *publish.Manager from the environment.
 // Defaults match docker-compose.test.yml's test-runner service so the test
 // works in-cluster (compose internal hostnames) and is overridable for
 // out-of-cluster use (export the env vars before running go test).
-func integrationConfig(t *testing.T, workspaceName string) *gismanager.ManagerConfig {
+func integrationConfig(t *testing.T, workspaceName string) *publish.Manager {
 	t.Helper()
 
 	cfgPath := filepath.Join(t.TempDir(), "integration_config.yml")
@@ -44,7 +45,7 @@ datastore:
   password: %s
   name: gismanager_test_ds
 source:
-  path: ./testdata
+  path: ../testdata
 `,
 		envOr("GISMANAGER_TEST_GEOSERVER_URL", "http://localhost:8080/geoserver"),
 		envOr("GISMANAGER_TEST_GEOSERVER_USER", "admin"),
@@ -60,7 +61,7 @@ source:
 		t.Fatalf("write tmp config: %v", err)
 	}
 
-	mgr, err := gismanager.FromConfig(cfgPath)
+	mgr, err := publish.FromConfig(cfgPath)
 	if err != nil {
 		t.Fatalf("FromConfig: %v", err)
 	}
@@ -84,7 +85,7 @@ func uniqueWorkspaceName(t *testing.T) string {
 
 // cleanup deletes the workspace recursively. Called via t.Cleanup so tests
 // leave a clean GeoServer behind even on failure.
-func cleanup(t *testing.T, mgr *gismanager.ManagerConfig, ws string) {
+func cleanup(t *testing.T, mgr *publish.Manager, ws string) {
 	t.Helper()
 	c, err := mgr.GetGeoserverCatalog()
 	if err != nil {
@@ -100,7 +101,7 @@ func cleanup(t *testing.T, mgr *gismanager.ManagerConfig, ws string) {
 }
 
 // TestPublishAll_EndToEnd_Integration exercises the high-level
-// (*ManagerConfig).PublishAll convenience added in PR 3 of the v1.1
+// (*Manager).PublishAll convenience added in PR 3 of the v1.1
 // series. It walks testdata/ end-to-end through the same pipeline the
 // gismanager CLI uses (Walk → LayerToPostgis → PublishGeoserverLayer)
 // and verifies via the v2 client that the workspace + datastore + at
@@ -143,7 +144,7 @@ func TestPublishGeoJSON_EndToEnd_Integration(t *testing.T) {
 	t.Cleanup(func() { cleanup(t, mgr, ws) })
 
 	// Pick a small GeoJSON fixture so the test stays fast.
-	srcPath := "./testdata/neighborhood_names_gis.geojson"
+	srcPath := "../testdata/neighborhood_names_gis.geojson"
 	src, err := mgr.OpenSource(ctx, srcPath, 0)
 	if err != nil {
 		t.Fatalf("OpenSource %s: %v", srcPath, err)
@@ -157,7 +158,7 @@ func TestPublishGeoJSON_EndToEnd_Integration(t *testing.T) {
 		t.Fatalf("source %s has no layers", srcPath)
 	}
 	layer := src.LayerByIndex(0)
-	gLayer := gismanager.GdalLayer{Layer: &layer}
+	gLayer := publish.Layer{Layer: &layer}
 
 	newLayer, err := gLayer.LayerToPostgis(target, mgr, true)
 	if err != nil {
@@ -198,7 +199,7 @@ func TestPublishGeoJSON_Idempotent_Integration(t *testing.T) {
 	mgr := integrationConfig(t, ws)
 	t.Cleanup(func() { cleanup(t, mgr, ws) })
 
-	src, err := mgr.OpenSource(ctx, "./testdata/neighborhood_names_gis.geojson", 0)
+	src, err := mgr.OpenSource(ctx, "../testdata/neighborhood_names_gis.geojson", 0)
 	if err != nil {
 		t.Fatalf("OpenSource: %v", err)
 	}
@@ -207,7 +208,7 @@ func TestPublishGeoJSON_Idempotent_Integration(t *testing.T) {
 		t.Fatalf("OpenSource postgis: %v", err)
 	}
 	layer := src.LayerByIndex(0)
-	gLayer := gismanager.GdalLayer{Layer: &layer}
+	gLayer := publish.Layer{Layer: &layer}
 
 	newLayer, err := gLayer.LayerToPostgis(target, mgr, true)
 	if err != nil {
@@ -230,38 +231,38 @@ func TestUnsupportedFormat_Integration(t *testing.T) {
 	mgr := integrationConfig(t, ws)
 	// No t.Cleanup — no workspace was ever created.
 
-	_, err := mgr.OpenSource(ctx, "./testdata/sample_dummy.xml", 0)
-	if !errors.Is(err, gismanager.ErrUnsupportedFormat) {
-		t.Fatalf("expected ErrUnsupportedFormat, got %v", err)
+	_, err := mgr.OpenSource(ctx, "../testdata/sample_dummy.xml", 0)
+	if !errors.Is(err, errs.ErrUnsupportedFormat) {
+		t.Fatalf("expected errs.ErrUnsupportedFormat, got %v", err)
 	}
 }
 
 // TestLayerToPostgis_NilDatasource_Integration locks in the
-// ErrInvalidDatasource branch of LayerToPostgis. It needs the integration
+// errs.ErrInvalidDatasource branch of LayerToPostgis. It needs the integration
 // build tag because DBIsAlive runs first and would fail with
-// ErrPostGISConnect when no PostGIS is reachable, masking the
+// errs.ErrPostGISConnect when no PostGIS is reachable, masking the
 // nil-datasource check this test is asserting. Direct port of the same
 // case from the pre-revival ManagerLayerSuite.TestLayerOperations.
 func TestLayerToPostgis_NilDatasource_Integration(t *testing.T) {
 	ctx := context.Background()
 	mgr := integrationConfig(t, uniqueWorkspaceName(t))
-	src, err := mgr.OpenSource(ctx, "./testdata/neighborhood_names_gis.geojson", 0)
+	src, err := mgr.OpenSource(ctx, "../testdata/neighborhood_names_gis.geojson", 0)
 	if err != nil {
 		t.Fatalf("OpenSource: %v", err)
 	}
 	layer := src.LayerByIndex(0)
-	gLayer := gismanager.GdalLayer{Layer: &layer}
+	gLayer := publish.Layer{Layer: &layer}
 
 	got, postgisErr := gLayer.LayerToPostgis(nil, mgr, true)
 	if got != nil {
 		t.Errorf("got non-nil layer with nil targetSource: %#v", got)
 	}
-	if !errors.Is(postgisErr, gismanager.ErrInvalidDatasource) {
-		t.Fatalf("expected ErrInvalidDatasource, got %v", postgisErr)
+	if !errors.Is(postgisErr, errs.ErrInvalidDatasource) {
+		t.Fatalf("expected errs.ErrInvalidDatasource, got %v", postgisErr)
 	}
 }
 
-// TestLayerToPostgis_NilLayer_Integration locks in the ErrInvalidLayer
+// TestLayerToPostgis_NilLayer_Integration locks in the errs.ErrInvalidLayer
 // branch of LayerToPostgis. Direct port of the same case from the
 // pre-revival ManagerLayerSuite.TestLayerOperations.
 func TestLayerToPostgis_NilLayer_Integration(t *testing.T) {
@@ -272,13 +273,13 @@ func TestLayerToPostgis_NilLayer_Integration(t *testing.T) {
 		t.Fatalf("OpenSource postgis: %v", err)
 	}
 
-	gLayer := gismanager.GdalLayer{} // nil embedded *gdal.Layer
+	gLayer := publish.Layer{} // nil embedded *gdal.Layer
 
 	got, postgisErr := gLayer.LayerToPostgis(target, mgr, true)
 	if got != nil {
-		t.Errorf("got non-nil layer with nil GdalLayer.Layer: %#v", got)
+		t.Errorf("got non-nil layer with nil Layer.Layer: %#v", got)
 	}
-	if !errors.Is(postgisErr, gismanager.ErrInvalidLayer) {
-		t.Fatalf("expected ErrInvalidLayer, got %v", postgisErr)
+	if !errors.Is(postgisErr, errs.ErrInvalidLayer) {
+		t.Fatalf("expected errs.ErrInvalidLayer, got %v", postgisErr)
 	}
 }

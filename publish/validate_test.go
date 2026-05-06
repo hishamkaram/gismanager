@@ -1,16 +1,18 @@
-package gismanager
+package publish
 
 import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
-// fullConfig returns a ManagerConfig with every required field
+// fullConfig returns a Manager with every required field
 // populated to a sane non-zero value. Tests start from this and
 // blank out one field at a time to exercise Validate's error paths.
-func fullConfig() *ManagerConfig {
-	return &ManagerConfig{
+func fullConfig() *Manager {
+	return &Manager{
 		Geoserver: GeoserverConfig{
 			ServerURL:     "http://localhost:8080/geoserver",
 			Username:      "admin",
@@ -25,7 +27,7 @@ func fullConfig() *ManagerConfig {
 			DBPass: "golang",
 			Name:   "gismanager_data",
 		},
-		Source: SourceConfig{Path: "./testdata"},
+		Source: SourceConfig{Path: "../testdata"},
 	}
 }
 
@@ -38,20 +40,20 @@ func TestManagerConfig_Validate_HappyPath(t *testing.T) {
 func TestManagerConfig_Validate_RejectsEachMissingField(t *testing.T) {
 	cases := []struct {
 		name      string
-		mutate    func(*ManagerConfig)
+		mutate    func(*Manager)
 		wantInMsg string
 	}{
-		{"missing geoserver.url", func(c *ManagerConfig) { c.Geoserver.ServerURL = "" }, "geoserver.url is required"},
-		{"missing geoserver.workspace", func(c *ManagerConfig) { c.Geoserver.WorkspaceName = "" }, "geoserver.workspace is required"},
-		{"missing geoserver.username", func(c *ManagerConfig) { c.Geoserver.Username = "" }, "geoserver.username is required"},
-		{"missing geoserver.password", func(c *ManagerConfig) { c.Geoserver.Password = "" }, "geoserver.password is required"},
-		{"missing datastore.host", func(c *ManagerConfig) { c.Datastore.Host = "" }, "datastore.host is required"},
-		{"zero datastore.port", func(c *ManagerConfig) { c.Datastore.Port = 0 }, "datastore.port is required"},
-		{"missing datastore.database", func(c *ManagerConfig) { c.Datastore.DBName = "" }, "datastore.database is required"},
-		{"missing datastore.username", func(c *ManagerConfig) { c.Datastore.DBUser = "" }, "datastore.username is required"},
-		{"missing datastore.password", func(c *ManagerConfig) { c.Datastore.DBPass = "" }, "datastore.password is required"},
-		{"missing datastore.name", func(c *ManagerConfig) { c.Datastore.Name = "" }, "datastore.name is required"},
-		{"missing source.path", func(c *ManagerConfig) { c.Source.Path = "" }, "source.path is required"},
+		{"missing geoserver.url", func(c *Manager) { c.Geoserver.ServerURL = "" }, "geoserver.url is required"},
+		{"missing geoserver.workspace", func(c *Manager) { c.Geoserver.WorkspaceName = "" }, "geoserver.workspace is required"},
+		{"missing geoserver.username", func(c *Manager) { c.Geoserver.Username = "" }, "geoserver.username is required"},
+		{"missing geoserver.password", func(c *Manager) { c.Geoserver.Password = "" }, "geoserver.password is required"},
+		{"missing datastore.host", func(c *Manager) { c.Datastore.Host = "" }, "datastore.host is required"},
+		{"zero datastore.port", func(c *Manager) { c.Datastore.Port = 0 }, "datastore.port is required"},
+		{"missing datastore.database", func(c *Manager) { c.Datastore.DBName = "" }, "datastore.database is required"},
+		{"missing datastore.username", func(c *Manager) { c.Datastore.DBUser = "" }, "datastore.username is required"},
+		{"missing datastore.password", func(c *Manager) { c.Datastore.DBPass = "" }, "datastore.password is required"},
+		{"missing datastore.name", func(c *Manager) { c.Datastore.Name = "" }, "datastore.name is required"},
+		{"missing source.path", func(c *Manager) { c.Source.Path = "" }, "source.path is required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -61,15 +63,15 @@ func TestManagerConfig_Validate_RejectsEachMissingField(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Validate(): want error, got nil")
 			}
-			if !errors.Is(err, ErrConfigInvalid) {
-				t.Errorf("errors.Is(err, ErrConfigInvalid) = false; want true. err=%v", err)
+			if !errors.Is(err, errs.ErrConfigInvalid) {
+				t.Errorf("errors.Is(err, errs.ErrConfigInvalid) = false; want true. err=%v", err)
 			}
 			if !strings.Contains(err.Error(), tc.wantInMsg) {
 				t.Errorf("error message missing %q\n got: %v", tc.wantInMsg, err)
 			}
-			var gerr *GISError
+			var gerr *errs.GISError
 			if !errors.As(err, &gerr) {
-				t.Fatalf("errors.As to *GISError: no match")
+				t.Fatalf("errors.As to *errs.GISError: no match")
 			}
 			if gerr.Op != "Validate" {
 				t.Errorf("Op = %q; want Validate", gerr.Op)
@@ -110,7 +112,7 @@ func TestManagerConfig_ExpandEnv(t *testing.T) {
 	t.Setenv("GISMGR_TEST_PG_PASS", "demo-pg-pass")
 	t.Setenv("GISMGR_TEST_SRC_PATH", "/srv/data")
 
-	c := &ManagerConfig{
+	c := &Manager{
 		Geoserver: GeoserverConfig{
 			ServerURL: "${GISMGR_TEST_GS_URL}",
 			Username:  "${GISMGR_TEST_GS_USER}",
@@ -145,7 +147,7 @@ func TestManagerConfig_ExpandEnv(t *testing.T) {
 func TestManagerConfig_ExpandEnv_UnsetVarBecomesEmpty(t *testing.T) {
 	t.Setenv("GISMGR_TEST_REAL", "real-value")
 
-	c := &ManagerConfig{
+	c := &Manager{
 		Geoserver: GeoserverConfig{
 			ServerURL: "${GISMGR_TEST_REAL}",
 			Password:  "${GISMGR_TEST_DEFINITELY_UNSET_xyzzy}",
@@ -162,15 +164,15 @@ func TestManagerConfig_ExpandEnv_UnsetVarBecomesEmpty(t *testing.T) {
 }
 
 func TestFromConfig_RejectsMissingFields(t *testing.T) {
-	mgr, err := FromConfig("./testdata/test_config_missing.yml")
+	mgr, err := FromConfig("../testdata/test_config_missing.yml")
 	if mgr != nil {
 		t.Errorf("manager = %v; want nil on incomplete config", mgr)
 	}
 	if err == nil {
 		t.Fatal("err = nil; want validation failure")
 	}
-	if !errors.Is(err, ErrConfigInvalid) {
-		t.Errorf("errors.Is(err, ErrConfigInvalid) = false; want true. err=%v", err)
+	if !errors.Is(err, errs.ErrConfigInvalid) {
+		t.Errorf("errors.Is(err, errs.ErrConfigInvalid) = false; want true. err=%v", err)
 	}
 	// The aggregated error should call out every missing field.
 	for _, want := range []string{
@@ -192,9 +194,9 @@ func TestFromConfig_ExpandsEnvVars(t *testing.T) {
 	t.Setenv("GISMGR_TEST_PG_HOST", "demo-postgis")
 	t.Setenv("GISMGR_TEST_PG_USER", "demo-pg-user")
 	t.Setenv("GISMGR_TEST_PG_PASS", "demo-pg-secret")
-	t.Setenv("GISMGR_TEST_SRC_PATH", "./testdata")
+	t.Setenv("GISMGR_TEST_SRC_PATH", "../testdata")
 
-	mgr, err := FromConfig("./testdata/test_config_envvars.yml")
+	mgr, err := FromConfig("../testdata/test_config_envvars.yml")
 	if err != nil {
 		t.Fatalf("FromConfig: %v", err)
 	}
@@ -210,7 +212,7 @@ func TestFromConfig_ExpandsEnvVars(t *testing.T) {
 	if got := mgr.Datastore.DBPass; got != "demo-pg-secret" {
 		t.Errorf("Datastore.DBPass = %q", got)
 	}
-	if got := mgr.Source.Path; got != "./testdata" {
+	if got := mgr.Source.Path; got != "../testdata" {
 		t.Errorf("Source.Path = %q", got)
 	}
 }

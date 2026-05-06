@@ -1,7 +1,4 @@
-// Package gismanager publishes GIS data files (shapefile, GeoJSON,
-// GeoPackage, KML) to PostGIS, then exposes the resulting tables as
-// GeoServer feature types via the geoserver/v2 REST client.
-package gismanager
+package publish
 
 import "fmt"
 

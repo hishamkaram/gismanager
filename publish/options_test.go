@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"bytes"
@@ -57,7 +57,7 @@ func TestNew_WithLogger_AcceptsCustomLogger(t *testing.T) {
 func TestNew_WithLoggerNil_FallsBackToDefault(t *testing.T) {
 	mgr, err := New(WithLogger(nil))
 	assert.NoError(t, err)
-	assert.NotNil(t, mgr.logger, "WithLogger(nil) must fall back to GetLogger()")
+	assert.NotNil(t, mgr.logger, "WithLogger(nil) must fall back to slogx.Default()")
 }
 
 func TestNew_NilOptionIgnored(t *testing.T) {
@@ -73,9 +73,9 @@ func TestNew_NilOptionIgnored(t *testing.T) {
 func TestFromConfig_ParityWithNew(t *testing.T) {
 	// Loading the same YAML through FromConfig and through New + manual
 	// options should yield deep-equal Geoserver / Datastore / Source
-	// values. Logger pointers will differ — both are GetLogger() instances
+	// values. Logger pointers will differ — both are slogx.Default() instances
 	// which are not deduped — so compare the configurable fields only.
-	viaFromConfig, err := FromConfig("./testdata/test_config.yml")
+	viaFromConfig, err := FromConfig("../testdata/test_config.yml")
 	assert.NoError(t, err)
 
 	viaNew, err := New(
@@ -89,7 +89,7 @@ func TestFromConfig_ParityWithNew(t *testing.T) {
 			Host: "postgis", Port: 5432,
 			DBName: "gis", DBUser: "golang", DBPass: "golang", Name: "gismanager_data",
 		}),
-		WithSource(SourceConfig{Path: "./testdata"}),
+		WithSource(SourceConfig{Path: "../testdata"}),
 	)
 	assert.NoError(t, err)
 

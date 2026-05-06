@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // depends on the fixtures (multiple layers per GeoPackage); we assert
 // it's non-zero so the test stays robust against fixture additions.
 func TestWalk_YieldsLayersFromTestdata(t *testing.T) {
-	mgr, err := New(WithSource(SourceConfig{Path: "./testdata"}))
+	mgr, err := New(WithSource(SourceConfig{Path: "../testdata"}))
 	assert.NoError(t, err)
 
 	ctx := context.Background()
@@ -37,7 +37,7 @@ func TestWalk_YieldsLayersFromTestdata(t *testing.T) {
 // a successful early break + a subsequent fresh walk is the strongest
 // in-test signal we can produce without instrumenting CGo.
 func TestWalk_EarlyBreak_DoesNotPanic(t *testing.T) {
-	mgr, err := New(WithSource(SourceConfig{Path: "./testdata"}))
+	mgr, err := New(WithSource(SourceConfig{Path: "../testdata"}))
 	assert.NoError(t, err)
 
 	ctx := context.Background()
@@ -67,7 +67,7 @@ func TestWalk_EarlyBreak_DoesNotPanic(t *testing.T) {
 // asserts the iterator yields the cancellation error without producing
 // any layer items.
 func TestWalk_HonorsContextCancellation(t *testing.T) {
-	mgr, err := New(WithSource(SourceConfig{Path: "./testdata"}))
+	mgr, err := New(WithSource(SourceConfig{Path: "../testdata"}))
 	assert.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -92,7 +92,7 @@ func TestWalk_HonorsContextCancellation(t *testing.T) {
 // the supportedEXT entry was "kml" (no dot) and KML files were silently
 // dropped from directory walks; this test would have failed.
 func TestWalk_PicksUpKMLFixture(t *testing.T) {
-	mgr, err := New(WithSource(SourceConfig{Path: "./testdata"}))
+	mgr, err := New(WithSource(SourceConfig{Path: "../testdata"}))
 	assert.NoError(t, err)
 
 	sawKML := false

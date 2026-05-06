@@ -1,4 +1,4 @@
-package gismanager
+package publish
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 
 	geoserver "github.com/hishamkaram/geoserver/v2"
 	"github.com/lukeroth/gdal"
+
+	"github.com/hishamkaram/gismanager/internal/errs"
 )
 
 // GeoserverConfig holds the GeoServer endpoint and credentials. WorkspaceName
@@ -28,18 +30,18 @@ type SourceConfig struct {
 	Path string `yaml:"path"`
 }
 
-// ManagerConfig is the top-level configuration loaded from YAML.
-type ManagerConfig struct {
+// Manager is the top-level configuration loaded from YAML.
+type Manager struct {
 	Geoserver GeoserverConfig `yaml:"geoserver"`
 	Datastore DatastoreConfig `yaml:"datastore"`
 	Source    SourceConfig    `yaml:"source"`
 	logger    *slog.Logger
 }
 
-// Validate checks that every required field on a ManagerConfig is set
+// Validate checks that every required field on a Manager is set
 // to a non-zero value and reports the missing fields in a single error.
-// The error wraps [ErrConfigInvalid]; recover the field list via
-// [errors.As] into [*GISError] and inspect Cause.Error().
+// The error wraps [errs.ErrConfigInvalid]; recover the field list via
+// [errors.As] into [*errs.GISError] and inspect Cause.Error().
 //
 // Validate covers the publish-pipeline contract — every field needed
 // for the walk → PostGIS-load → GeoServer-publish flow. Programmatic
@@ -48,7 +50,7 @@ type ManagerConfig struct {
 // [FromConfig] calls it automatically, since YAML callers signal
 // "I intend a full publish setup" by writing the YAML in the first
 // place.
-func (c *ManagerConfig) Validate() error {
+func (c *Manager) Validate() error {
 	var problems []string
 	if c.Geoserver.ServerURL == "" {
 		problems = append(problems, "geoserver.url is required")
@@ -84,7 +86,7 @@ func (c *ManagerConfig) Validate() error {
 		problems = append(problems, "source.path is required")
 	}
 	if len(problems) > 0 {
-		return newGISError("Validate", "", ErrConfigInvalid,
+		return errs.NewGISError("Validate", "", errs.ErrConfigInvalid,
 			errors.New(strings.Join(problems, "; ")))
 	}
 	return nil
@@ -107,7 +109,7 @@ func (c *ManagerConfig) Validate() error {
 // Datastore.Port (uint) is not expanded — port numbers should come from
 // config, not env vars; if a user truly needs a parameterized port they
 // should set it via the [WithDatastore] option in code.
-func (c *ManagerConfig) expandEnv() {
+func (c *Manager) expandEnv() {
 	c.Geoserver.ServerURL = os.ExpandEnv(c.Geoserver.ServerURL)
 	c.Geoserver.WorkspaceName = os.ExpandEnv(c.Geoserver.WorkspaceName)
 	c.Geoserver.Username = os.ExpandEnv(c.Geoserver.Username)
@@ -124,7 +126,7 @@ func (c *ManagerConfig) expandEnv() {
 // manager's GeoServer endpoint. Each call constructs a fresh client; the
 // underlying HTTP transport is the stdlib default. Returns an error if the
 // server URL is malformed.
-func (manager *ManagerConfig) GetGeoserverCatalog() (*geoserver.Client, error) {
+func (manager *Manager) GetGeoserverCatalog() (*geoserver.Client, error) {
 	return geoserver.New(
 		manager.Geoserver.ServerURL,
 		geoserver.WithBasicAuth(manager.Geoserver.Username, manager.Geoserver.Password),
@@ -137,10 +139,10 @@ func (manager *ManagerConfig) GetGeoserverCatalog() (*geoserver.Client, error) {
 // callers should still pass a real context so a downstream-aware version
 // is a non-breaking swap.
 //
-// Errors wrap [ErrUnsupportedFormat] (driver lookup failed) or
-// [ErrInvalidDatasource] (driver matched but Open returned !ok). Match via
-// [errors.Is]; recover details via [errors.As] into *GISError.
-func (manager *ManagerConfig) OpenSource(_ context.Context, path string, access int) (*gdal.DataSource, error) {
+// Errors wrap [errs.ErrUnsupportedFormat] (driver lookup failed) or
+// [errs.ErrInvalidDatasource] (driver matched but Open returned !ok). Match via
+// [errors.Is]; recover details via [errors.As] into *errs.GISError.
+func (manager *Manager) OpenSource(_ context.Context, path string, access int) (*gdal.DataSource, error) {
 	driver, err := manager.GetDriver(path)
 	if err != nil {
 		// GetDriver already logged + wrapped; just return.
@@ -149,7 +151,7 @@ func (manager *ManagerConfig) OpenSource(_ context.Context, path string, access 
 	targetSource, ok := driver.Open(path, access)
 	if !ok {
 		manager.logger.Error("open source", "path", path, "access", access)
-		return nil, newGISError("OpenSource", path, ErrInvalidDatasource, nil)
+		return nil, errs.NewGISError("OpenSource", path, errs.ErrInvalidDatasource, nil)
 	}
 	return &targetSource, nil
 }
@@ -159,8 +161,8 @@ func (manager *ManagerConfig) OpenSource(_ context.Context, path string, access 
 // the PostgreSQL driver; everything else dispatches on file extension.
 //
 // On unsupported extensions, returns an error wrapping
-// [ErrUnsupportedFormat] (match via [errors.Is]).
-func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err error) {
+// [errs.ErrUnsupportedFormat] (match via [errors.Is]).
+func (manager *Manager) GetDriver(path string) (driver gdal.OGRDriver, err error) {
 	if pgRegex.MatchString(path) {
 		driver = gdal.OGRDriverByName(postgreSQLDriver)
 	} else {
@@ -176,7 +178,7 @@ func (manager *ManagerConfig) GetDriver(path string) (driver gdal.OGRDriver, err
 		case ".parquet":
 			driver = gdal.OGRDriverByName(parquetDriver)
 		default:
-			err = newGISError("GetDriver", path, ErrUnsupportedFormat, nil)
+			err = errs.NewGISError("GetDriver", path, errs.ErrUnsupportedFormat, nil)
 			manager.logger.Error("get driver", "path", path, "err", err)
 		}
 	}
