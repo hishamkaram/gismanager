@@ -4,6 +4,16 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-05-06
+
+### Context
+
+Infrastructure-only patch: fixes the release pipeline's binary-extract step that hung past the 60-min monitor window during the v1.4.0 cut. The image stage was unaffected (multi-arch + cosign-signed at ghcr.io published cleanly); only the raw amd64 binary tarball, checksums, and SBOM were missing from the v1.4.0 GitHub Release page. The library and CLI surfaces are byte-for-byte unchanged.
+
+### Fixed
+
+- **`release.yml` binary-extract step.** Replaced `docker buildx build --output type=local,dest=./dist-build .` (extracts the entire ~4 GB build-stage filesystem; hung the runner) with a two-step pattern: `docker/build-push-action@v6` with `platforms: linux/amd64` + `load: true` to hydrate the local Docker daemon, then `docker create` + `docker cp /usr/local/bin/<binary>` to extract just the three binaries (~10s). Validated end-to-end via the `v1.4.1-rc.1` tag — full release run completed in ~40 min vs. v1.4.0's >60 min hang. (PR #50)
+
 ## [1.4.0] — 2026-05-06
 
 ### Context
