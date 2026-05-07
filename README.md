@@ -1,5 +1,5 @@
-[![Go Reference](https://pkg.go.dev/badge/github.com/hishamkaram/gismanager.svg)](https://pkg.go.dev/github.com/hishamkaram/gismanager)
-[![Go Report Card](https://goreportcard.com/badge/github.com/hishamkaram/gismanager)](https://goreportcard.com/report/github.com/hishamkaram/gismanager)
+[![Go Reference](https://pkg.go.dev/badge/github.com/hishamkaram/gismanager/v2.svg)](https://pkg.go.dev/github.com/hishamkaram/gismanager/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/hishamkaram/gismanager/v2)](https://goreportcard.com/report/github.com/hishamkaram/gismanager/v2)
 [![GitHub license](https://img.shields.io/github/license/hishamkaram/gismanager.svg)](https://github.com/hishamkaram/gismanager/blob/master/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/hishamkaram/gismanager.svg)](https://github.com/hishamkaram/gismanager/issues)
 
@@ -31,8 +31,8 @@ Three CLI binaries plus a Go library covering two GIS workflows:
 - **`layerSchema`** — read-only schema inspector. Walks `source.path`, opens each GIS file via GDAL, and prints the geometry column + attribute fields for every layer it finds. No PostGIS, no GeoServer.
 - **`gisconvert`** *(v1.2+)* — data-conversion CLI: vector format conversion (`ogr2ogr` equivalent), raster format conversion (`gdal_translate` equivalent), Cloud-Optimized GeoTIFF generation, and raster reprojection (`gdalwarp` equivalent). See [Conversion](#conversion).
 - **`package gismanager`** — both flows as a Go library:
-  - **Publish**: construct a `*ManagerConfig` via `gismanager.New(opts ...Option)` (functional-options) or the YAML-driven `gismanager.FromConfig(yamlPath)`, then call `Walk` / `PublishAll` or the lower-level `OpenSource` / `LayerToPostgis` / `PublishGeoserverLayer` primitives.
-  - **Convert** *(v1.2+)*: stateless `ConvertVector` / `ConvertRaster` / `ToCOG` / `ReprojectRaster` package functions. No `*ManagerConfig` required.
+  - **Publish**: construct a `*publish.Manager` via `publish.New(opts ...Option)` (functional-options) or the YAML-driven `publish.FromConfig(yamlPath)`, then call `Walk` / `PublishAll` or the lower-level `OpenSource` / `LayerToPostgis` / `PublishGeoserverLayer` primitives.
+  - **Convert** *(v1.2+)*: stateless `ConvertVector` / `ConvertRaster` / `ToCOG` / `ReprojectRaster` package functions. No `*publish.Manager` required.
 
 ### Supported source formats
 
@@ -40,7 +40,7 @@ The two surfaces have different reach.
 
 #### Publish pipeline (`cmd/gismanager`, `Walk`, `PublishAll`)
 
-Driven by an explicit extension allowlist in [`vars.go::supportedEXT`](vars.go) — only these extensions are picked up by directory walks:
+Driven by an explicit extension allowlist in [`publish/vars.go::supportedEXT`](publish/vars.go) — only these extensions are picked up by directory walks:
 
 | Extension | OGR driver |
 |---|---|
@@ -49,7 +49,7 @@ Driven by an explicit extension allowlist in [`vars.go::supportedEXT`](vars.go) 
 | `.gpkg` | GeoPackage |
 | `.kml` | KML |
 
-Zipped shapefile bundles are auto-extracted into a temp directory before the OGR open — see [`internal/zipx`](internal/zipx) for the stdlib `archive/zip`-based extractor (zip-slip rejection, 2 GiB per-entry cap). Adding a new extension to the publish pipeline means adding a row to `supportedEXT` and a switch case in [`manager.go::GetDriver`](manager.go).
+Zipped shapefile bundles are auto-extracted into a temp directory before the OGR open — see [`internal/zipx`](internal/zipx) for the stdlib `archive/zip`-based extractor (zip-slip rejection, 2 GiB per-entry cap). Adding a new extension to the publish pipeline means adding a row to `supportedEXT` and a switch case in [`publish/manager.go::GetDriver`](publish/manager.go).
 
 #### Conversion entry points *(v1.2+, `cmd/gisconvert`, `ConvertVector` / `ConvertRaster` / `ToCOG` / `ReprojectRaster`)*
 
@@ -131,7 +131,7 @@ curl -fsS -u admin:geoserver \
 make compose-test-down
 ```
 
-Same idea programmatically (the integration suite is a worked example — see [`publish_integration_test.go`](publish_integration_test.go) `TestPublishGeoJSON_EndToEnd_Integration`).
+Same idea programmatically (the integration suite is a worked example — see [`publish/publish_integration_test.go`](publish/publish_integration_test.go) `TestPublishGeoJSON_EndToEnd_Integration`).
 
 ## Conversion
 
@@ -147,26 +147,26 @@ Beyond the publish pipeline, gismanager ships a stateless conversion subsystem t
 | `BuildVRT` | `gdalbuildvrt` | mosaic many GeoTIFFs into a Virtual Raster (tile pyramid prep, RGBA stacking) | v1.3 |
 | `DEMProcessing` | `gdaldem` | DEM analysis: hillshade, slope, aspect, color-relief, TRI, TPI, roughness | v1.3 |
 
-All seven are top-level package functions — no `*ManagerConfig` required — and accept `/vsi*/`-prefixed paths transparently (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). Driver names supplied via the `With*Format` helpers are pre-validated against the running GDAL build (since v1.3) — an unknown driver surfaces as a clean `ErrConvertFailed` instead of GDAL's silent fail-with-stderr-warning behavior.
+All seven are top-level package functions — no `*publish.Manager` required — and accept `/vsi*/`-prefixed paths transparently (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`). Driver names supplied via the `With*Format` helpers are pre-validated against the running GDAL build (since v1.3) — an unknown driver surfaces as a clean `ErrConvertFailed` instead of GDAL's silent fail-with-stderr-warning behavior.
 
 ```go
 // Vector: 4326 GeoJSON → 3857 GeoPackage, clipped to Africa, simplified.
-err := gismanager.ConvertVector(ctx, "world.geojson", "africa.gpkg",
-    gismanager.WithVectorFormat("GPKG"),
-    gismanager.WithVectorOverwrite(),
-    gismanager.WithVectorTargetSRS("EPSG:3857"),
-    gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
-    gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
-    gismanager.WithVectorSimplify(100),
+err := convert.ConvertVector(ctx, "world.geojson", "africa.gpkg",
+    convert.WithVectorFormat("GPKG"),
+    convert.WithVectorOverwrite(),
+    convert.WithVectorTargetSRS("EPSG:3857"),
+    convert.WithVectorBoundingBox(-25, -40, 60, 40),
+    convert.WithVectorWhere("CONTINENT = 'Africa'"),
+    convert.WithVectorSimplify(100),
 )
 
 // Raster: GeoTIFF → COG with the canonical defaults.
-err = gismanager.ToCOG(ctx, "scene.tif", "scene.cog.tif")
+err = convert.ToCOG(ctx, "scene.tif", "scene.cog.tif")
 
 // Raster reprojection: UTM → Web Mercator.
-err = gismanager.ReprojectRaster(ctx, "utm.tif", "wm.tif",
+err = convert.ReprojectRaster(ctx, "utm.tif", "wm.tif",
     "EPSG:32618", "EPSG:3857",
-    gismanager.WithRasterResamplingAlg("bilinear"),
+    convert.WithRasterResamplingAlg("bilinear"),
 )
 ```
 
@@ -174,23 +174,23 @@ Full reference, more examples, and the cloud-I/O matrix: [`docs/conversions.md`]
 
 ## Errors
 
-Every error gismanager returns is a `*GISError` wrapping a sentinel from [`errors.go`](errors.go). Match by sentinel:
+Every error gismanager returns is a `*GISError` wrapping a sentinel from [`errs/errs.go`](errs/errs.go). Match by sentinel:
 
 ```go
-import "github.com/hishamkaram/gismanager"
+import "github.com/hishamkaram/gismanager/v2/publish"
 
 err := mgr.PublishGeoserverLayer(ctx, layer)
 switch {
-case errors.Is(err, gismanager.ErrPostGISConnect):
+case errors.Is(err, errs.ErrPostGISConnect):
     // PostGIS unreachable; bring it up and retry.
-case errors.Is(err, gismanager.ErrGeoServerPublish):
+case errors.Is(err, errs.ErrGeoServerPublish):
     // Workspace/datastore/feature-type creation failed; the wrapped
     // *geoserver.APIError carries the HTTP status (404, 409, 500…).
     var apiErr *geoserver.APIError
     if errors.As(err, &apiErr) {
         log.Printf("status=%d body=%s", apiErr.StatusCode, apiErr.Body)
     }
-case errors.Is(err, gismanager.ErrUnsupportedFormat):
+case errors.Is(err, errs.ErrUnsupportedFormat):
     // The path's extension isn't one of the dispatched OGR drivers.
 }
 ```
@@ -214,7 +214,7 @@ pattern and a Kubernetes deployment recipe.
 
 ## Configuration
 
-YAML schema (the same struct gets used by `gismanager.FromConfig`):
+YAML schema (the same struct gets used by `publish.FromConfig`):
 
 ```yaml
 geoserver:
@@ -244,11 +244,11 @@ A working config used by the integration suite lives at [`testdata/test_config.y
 ```go
 import (
     "context"
-    "github.com/hishamkaram/gismanager"
+    "github.com/hishamkaram/gismanager/v2/publish"
 )
 
 func main() {
-    mgr, err := gismanager.FromConfig("my-config.yaml")
+    mgr, err := publish.FromConfig("my-config.yaml")
     if err != nil { /* ... */ }
 
     ctx := context.Background()
@@ -287,46 +287,46 @@ func main() {
 
 ### Conversion *(v1.2+)*
 
-The conversion entry points are top-level package functions — no `*ManagerConfig` required, no GeoServer/PostGIS state held.
+The conversion entry points are top-level package functions — no `*publish.Manager` required, no GeoServer/PostGIS state held.
 
 ```go
 // Reproject + clip + filter + simplify in one call.
-err := gismanager.ConvertVector(ctx, "world.geojson", "africa.gpkg",
-    gismanager.WithVectorFormat("GPKG"),
-    gismanager.WithVectorOverwrite(),
-    gismanager.WithVectorTargetSRS("EPSG:3857"),
-    gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
-    gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
-    gismanager.WithVectorSimplify(100),
+err := convert.ConvertVector(ctx, "world.geojson", "africa.gpkg",
+    convert.WithVectorFormat("GPKG"),
+    convert.WithVectorOverwrite(),
+    convert.WithVectorTargetSRS("EPSG:3857"),
+    convert.WithVectorBoundingBox(-25, -40, 60, 40),
+    convert.WithVectorWhere("CONTINENT = 'Africa'"),
+    convert.WithVectorSimplify(100),
 )
 
 // Cloud-Optimized GeoTIFF with sane defaults.
-err = gismanager.ToCOG(ctx, "scene.tif", "scene.cog.tif")
+err = convert.ToCOG(ctx, "scene.tif", "scene.cog.tif")
 
 // UTM → Web Mercator with bilinear resampling.
-err = gismanager.ReprojectRaster(ctx, "utm.tif", "wm.tif",
+err = convert.ReprojectRaster(ctx, "utm.tif", "wm.tif",
     "EPSG:32618", "EPSG:3857",
-    gismanager.WithRasterResamplingAlg("bilinear"),
+    convert.WithRasterResamplingAlg("bilinear"),
 )
 
 // v1.3+: vector → raster (burn an attribute into a continuous Float32 field).
-err = gismanager.Rasterize(ctx, "countries.geojson", "pop.tif",
-    gismanager.WithRasterizeFormat("GTiff"),
-    gismanager.WithRasterizeOutputType("Float32"),
-    gismanager.WithRasterizeAttribute("POP_EST"),
-    gismanager.WithRasterizeOutputSize(360, 180),
+err = convert.Rasterize(ctx, "countries.geojson", "pop.tif",
+    convert.WithRasterizeFormat("GTiff"),
+    convert.WithRasterizeOutputType("Float32"),
+    convert.WithRasterizeAttribute("POP_EST"),
+    convert.WithRasterizeOutputSize(360, 180),
 )
 
 // v1.3+: stack many GeoTIFFs into a single VRT for downstream Warp/Translate.
-err = gismanager.BuildVRT(ctx, "mosaic.vrt",
+err = convert.BuildVRT(ctx, "mosaic.vrt",
     []string{"tile1.tif", "tile2.tif", "tile3.tif"},
-    gismanager.WithVRTResolution("highest"),
+    convert.WithVRTResolution("highest"),
 )
 
 // v1.3+: hillshade from a DEM.
-err = gismanager.DEMProcessing(ctx, "dem.tif", "dem.hs.tif", "hillshade",
-    gismanager.WithDEMAzimuth(315),
-    gismanager.WithDEMAltitude(45),
+err = convert.DEMProcessing(ctx, "dem.tif", "dem.hs.tif", "hillshade",
+    convert.WithDEMAzimuth(315),
+    convert.WithDEMAltitude(45),
 )
 ```
 

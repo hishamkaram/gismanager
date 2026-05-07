@@ -8,7 +8,7 @@ the four most common GDAL/OGR operations:
 - **`ToCOG`** — Cloud-Optimized GeoTIFF generation (a thin wrapper over `ConvertRaster`)
 - **`ReprojectRaster`** — raster reprojection (the `gdalwarp` equivalent)
 
-Each is a top-level package function; none requires a `*ManagerConfig`.
+Each is a top-level package function; none requires a `*publish.Manager`.
 Configuration goes through functional options (`WithVector*` or
 `WithRaster*` modality prefix to avoid name collisions).
 
@@ -17,36 +17,36 @@ Configuration goes through functional options (`WithVector*` or
 ### Shapefile → GeoPackage
 
 ```go
-err := gismanager.ConvertVector(ctx,
+err := convert.ConvertVector(ctx,
     "/vsizip//data/countries.zip", // /vsizip/ for zipped Shapefile bundles
     "/data/countries.gpkg",
-    gismanager.WithVectorFormat("GPKG"),
-    gismanager.WithVectorOverwrite(),
+    convert.WithVectorFormat("GPKG"),
+    convert.WithVectorOverwrite(),
 )
 ```
 
 ### GeoJSON → GeoPackage with reprojection, bbox clip, and attribute filter
 
 ```go
-err := gismanager.ConvertVector(ctx,
+err := convert.ConvertVector(ctx,
     "/data/world.geojson",
     "/data/africa_3857.gpkg",
-    gismanager.WithVectorFormat("GPKG"),
-    gismanager.WithVectorOverwrite(),
-    gismanager.WithVectorTargetSRS("EPSG:3857"),
-    gismanager.WithVectorBoundingBox(-25, -40, 60, 40),
-    gismanager.WithVectorWhere("CONTINENT = 'Africa'"),
-    gismanager.WithVectorSimplify(100),
-    gismanager.WithVectorLayerName("africa"),
+    convert.WithVectorFormat("GPKG"),
+    convert.WithVectorOverwrite(),
+    convert.WithVectorTargetSRS("EPSG:3857"),
+    convert.WithVectorBoundingBox(-25, -40, 60, 40),
+    convert.WithVectorWhere("CONTINENT = 'Africa'"),
+    convert.WithVectorSimplify(100),
+    convert.WithVectorLayerName("africa"),
 )
 ```
 
 ### Vector field selection
 
 ```go
-err := gismanager.ConvertVector(ctx, src, dst,
-    gismanager.WithVectorFormat("FlatGeobuf"),
-    gismanager.WithVectorSelectFields("NAME", "POP_EST", "CONTINENT"),
+err := convert.ConvertVector(ctx, src, dst,
+    convert.WithVectorFormat("FlatGeobuf"),
+    convert.WithVectorSelectFields("NAME", "POP_EST", "CONTINENT"),
 )
 ```
 
@@ -54,20 +54,20 @@ err := gismanager.ConvertVector(ctx, src, dst,
 
 `gismanager` v1.4 added GeoParquet support to the conversion subsystem
 and the publish-pipeline OGR dispatch. The `.parquet` extension routes
-to the GDAL `Parquet` driver in [`OpenSource`](../manager.go) and
+to the GDAL `Parquet` driver in [`OpenSource`](../publish/manager.go) and
 `GetDriver`, and `ConvertVector` accepts `Parquet` as a target format.
 
 ```go
 // Convert a Shapefile bundle into GeoParquet (cloud-native interchange).
-err := gismanager.ConvertVector(ctx,
+err := convert.ConvertVector(ctx,
     "/vsizip//data/countries.zip",
     "/data/countries.parquet",
-    gismanager.WithVectorFormat("Parquet"),
-    gismanager.WithVectorOverwrite(),
+    convert.WithVectorFormat("Parquet"),
+    convert.WithVectorOverwrite(),
 )
 
 // Read a GeoParquet file via the publish pipeline (manager-driven).
-mgr, _ := gismanager.New(/* ... */)
+mgr, _ := publish.New(/* ... */)
 ds, _ := mgr.OpenSource(ctx, "/data/cities.parquet", 0)
 defer ds.Destroy()
 ```
@@ -96,7 +96,7 @@ the same way it publishes from a Shapefile or GeoPackage today.
 ### GeoTIFF → Cloud-Optimized GeoTIFF
 
 ```go
-err := gismanager.ToCOG(ctx, "/data/scene.tif", "/data/scene.cog.tif")
+err := convert.ToCOG(ctx, "/data/scene.tif", "/data/scene.cog.tif")
 ```
 
 `ToCOG` defaults to `COMPRESS=DEFLATE`, `BLOCKSIZE=512`,
@@ -104,39 +104,39 @@ err := gismanager.ToCOG(ctx, "/data/scene.tif", "/data/scene.cog.tif")
 `WithRasterCreationOption`:
 
 ```go
-err := gismanager.ToCOG(ctx, src, dst,
-    gismanager.WithRasterCreationOption("COMPRESS", "ZSTD"),
-    gismanager.WithRasterCreationOption("PREDICTOR", "2"),
+err := convert.ToCOG(ctx, src, dst,
+    convert.WithRasterCreationOption("COMPRESS", "ZSTD"),
+    convert.WithRasterCreationOption("PREDICTOR", "2"),
 )
 ```
 
 ### GeoTIFF → PNG thumbnail
 
 ```go
-err := gismanager.ConvertRaster(ctx, "/data/scene.tif", "/data/preview.png",
-    gismanager.WithRasterFormat("PNG"),
-    gismanager.WithRasterBands(1, 2, 3),
+err := convert.ConvertRaster(ctx, "/data/scene.tif", "/data/preview.png",
+    convert.WithRasterFormat("PNG"),
+    convert.WithRasterBands(1, 2, 3),
 )
 ```
 
 ### Raster reprojection (UTM → Web Mercator)
 
 ```go
-err := gismanager.ReprojectRaster(ctx,
+err := convert.ReprojectRaster(ctx,
     "/data/scene_utm.tif",
     "/data/scene_3857.tif",
     "EPSG:32618", "EPSG:3857",
-    gismanager.WithRasterFormat("GTiff"),
-    gismanager.WithRasterResamplingAlg("bilinear"),
+    convert.WithRasterFormat("GTiff"),
+    convert.WithRasterResamplingAlg("bilinear"),
 )
 ```
 
 ### Raster reprojection with cookie-cutter clipping
 
 ```go
-err := gismanager.ReprojectRaster(ctx, src, dst,
+err := convert.ReprojectRaster(ctx, src, dst,
     "EPSG:4326", "EPSG:3857",
-    gismanager.WithRasterCutline("/data/aoi.geojson", "outline"),
+    convert.WithRasterCutline("/data/aoi.geojson", "outline"),
 )
 ```
 
@@ -149,24 +149,24 @@ extent shrinks to the polygon's envelope.
 ### Burn polygons into a Byte mask
 
 ```go
-err := gismanager.Rasterize(ctx, "countries.geojson", "africa_mask.tif",
-    gismanager.WithRasterizeFormat("GTiff"),
-    gismanager.WithRasterizeOutputType("Byte"),
-    gismanager.WithRasterizeBurnValues(1.0),
-    gismanager.WithRasterizeWhere("CONTINENT = 'Africa'"),
-    gismanager.WithRasterizeOutputBounds(-25, -40, 60, 40),
-    gismanager.WithRasterizeOutputSize(256, 256),
+err := convert.Rasterize(ctx, "countries.geojson", "africa_mask.tif",
+    convert.WithRasterizeFormat("GTiff"),
+    convert.WithRasterizeOutputType("Byte"),
+    convert.WithRasterizeBurnValues(1.0),
+    convert.WithRasterizeWhere("CONTINENT = 'Africa'"),
+    convert.WithRasterizeOutputBounds(-25, -40, 60, 40),
+    convert.WithRasterizeOutputSize(256, 256),
 )
 ```
 
 ### Burn an attribute into a continuous Float32 field
 
 ```go
-err := gismanager.Rasterize(ctx, "countries.geojson", "pop.tif",
-    gismanager.WithRasterizeFormat("GTiff"),
-    gismanager.WithRasterizeOutputType("Float32"),
-    gismanager.WithRasterizeAttribute("POP_EST"),
-    gismanager.WithRasterizeOutputSize(360, 180),
+err := convert.Rasterize(ctx, "countries.geojson", "pop.tif",
+    convert.WithRasterizeFormat("GTiff"),
+    convert.WithRasterizeOutputType("Float32"),
+    convert.WithRasterizeAttribute("POP_EST"),
+    convert.WithRasterizeOutputSize(360, 180),
 )
 ```
 
@@ -178,19 +178,19 @@ exclusive — use one or the other.
 ### Combine many GeoTIFFs into a Virtual Raster
 
 ```go
-err := gismanager.BuildVRT(ctx, "mosaic.vrt",
+err := convert.BuildVRT(ctx, "mosaic.vrt",
     []string{"tile1.tif", "tile2.tif", "tile3.tif"},
-    gismanager.WithVRTResolution("highest"),
-    gismanager.WithVRTAddAlpha(),
+    convert.WithVRTResolution("highest"),
+    convert.WithVRTAddAlpha(),
 )
 ```
 
 ### Stack single-band inputs into RGBA
 
 ```go
-err := gismanager.BuildVRT(ctx, "rgba.vrt",
+err := convert.BuildVRT(ctx, "rgba.vrt",
     []string{"red.tif", "green.tif", "blue.tif", "alpha.tif"},
-    gismanager.WithVRTSeparate(),
+    convert.WithVRTSeparate(),
 )
 ```
 
@@ -203,26 +203,26 @@ shared band count.
 ### Hillshade
 
 ```go
-err := gismanager.DEMProcessing(ctx, "dem.tif", "dem.hs.tif", "hillshade",
-    gismanager.WithDEMAzimuth(315),
-    gismanager.WithDEMAltitude(45),
-    gismanager.WithDEMMultidirectional(),
+err := convert.DEMProcessing(ctx, "dem.tif", "dem.hs.tif", "hillshade",
+    convert.WithDEMAzimuth(315),
+    convert.WithDEMAltitude(45),
+    convert.WithDEMMultidirectional(),
 )
 ```
 
 ### Slope
 
 ```go
-err := gismanager.DEMProcessing(ctx, "dem.tif", "dem.slope.tif", "slope",
-    gismanager.WithDEMAlgorithm("ZevenbergenThorne"),
+err := convert.DEMProcessing(ctx, "dem.tif", "dem.slope.tif", "slope",
+    convert.WithDEMAlgorithm("ZevenbergenThorne"),
 )
 ```
 
 ### Color-relief (requires a color file)
 
 ```go
-err := gismanager.DEMProcessing(ctx, "dem.tif", "dem.color.tif", "color-relief",
-    gismanager.WithDEMColorFile("./elevation_palette.txt"),
+err := convert.DEMProcessing(ctx, "dem.tif", "dem.color.tif", "color-relief",
+    convert.WithDEMColorFile("./elevation_palette.txt"),
 )
 ```
 
@@ -235,7 +235,7 @@ documented at https://gdal.org/programs/gdaldem.html#color-relief.
 [PMTiles](https://docs.protomaps.com/pmtiles/) is a single-file
 range-readable tile archive — ideal for serverless tile distribution
 from S3, HTTP, or any blob storage that supports HTTP range requests.
-v1.4 added [`ToPMTiles`](../convert_pmtiles.go), a thin wrapper over
+v1.4 added [`ToPMTiles`](../convert/pmtiles.go), a thin wrapper over
 [`protomaps/go-pmtiles`](https://github.com/protomaps/go-pmtiles)
 that converts an existing **MBTiles** archive to PMTiles v3.
 
@@ -243,14 +243,14 @@ Two-stage pipeline starting from a raster source:
 
 ```go
 // 1. raster -> MBTiles (via the GDAL MBTiles driver)
-err := gismanager.ConvertRaster(ctx,
+err := convert.ConvertRaster(ctx,
     "/data/scene.tif",
     "/tmp/scene.mbtiles",
-    gismanager.WithRasterFormat("MBTILES"),
+    convert.WithRasterFormat("MBTILES"),
 )
 
 // 2. MBTiles -> PMTiles
-err = gismanager.ToPMTiles(ctx,
+err = convert.ToPMTiles(ctx,
     "/tmp/scene.mbtiles",
     "/data/scene.pmtiles",
 )
@@ -279,7 +279,7 @@ so any of GDAL's virtual file system prefixes work transparently:
 ### Example: read a remote COG from S3 and reproject locally
 
 ```go
-err := gismanager.ReprojectRaster(ctx,
+err := convert.ReprojectRaster(ctx,
     "/vsis3/satellite-archive/2024/scene.tif",
     "/data/scene.local.tif",
     "EPSG:32618", "EPSG:3857",
@@ -289,21 +289,21 @@ err := gismanager.ReprojectRaster(ctx,
 ### Example: convert a remote GeoJSON over HTTP
 
 ```go
-err := gismanager.ConvertVector(ctx,
+err := convert.ConvertVector(ctx,
     "/vsicurl/https://example.com/data/admin.geojson",
     "/data/admin.gpkg",
-    gismanager.WithVectorFormat("GPKG"),
-    gismanager.WithVectorOverwrite(),
+    convert.WithVectorFormat("GPKG"),
+    convert.WithVectorOverwrite(),
 )
 ```
 
 ### Example: in-memory pipeline with `/vsimem/`
 
 ```go
-gismanager.ConvertVector(ctx,
+convert.ConvertVector(ctx,
     "/vsimem/in.geojson",   // populated upstream via gdal.VSIFileFromMemBuffer
     "/vsimem/out.gpkg",
-    gismanager.WithVectorFormat("GPKG"),
+    convert.WithVectorFormat("GPKG"),
 )
 ```
 
@@ -313,9 +313,9 @@ Every conversion entry point wraps GDAL's error in a `*GISError`. Branch
 on the sentinel to detect category:
 
 ```go
-err := gismanager.ConvertVector(ctx, src, dst, opts...)
-if errors.Is(err, gismanager.ErrConvertFailed) {
-    var gerr *gismanager.GISError
+err := convert.ConvertVector(ctx, src, dst, opts...)
+if errors.Is(err, errs.ErrConvertFailed) {
+    var gerr *errs.GISError
     if errors.As(err, &gerr) {
         log.Printf("conversion %s failed: %v", gerr.Op, gerr.Cause)
     }

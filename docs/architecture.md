@@ -27,13 +27,13 @@ gismanager is a small composition of three things:
                  └─────────────────────────┘
 ```
 
-The package wires the three together with a `*ManagerConfig` that holds the GeoServer endpoint, the PostGIS connection params, and the source-directory path. Everything else is a thin orchestration layer over GDAL + the upstream Go client.
+The package wires the three together with a `*publish.Manager` that holds the GeoServer endpoint, the PostGIS connection params, and the source-directory path. Everything else is a thin orchestration layer over GDAL + the upstream Go client.
 
 ## Package shape
 
 | Path | Purpose |
 |---|---|
-| `github.com/hishamkaram/gismanager` | Public API — `*ManagerConfig`, `*GdalLayer`, `*GISError`, sentinels, public method receivers |
+| `github.com/hishamkaram/gismanager` | Public API — `*publish.Manager`, `*publish.Layer`, `*GISError`, sentinels, public method receivers |
 | `github.com/hishamkaram/gismanager/internal/zipx` | stdlib `archive/zip` extractor with zip-slip rejection + per-entry size cap. Used to auto-extract zipped shapefile bundles before the OGR open. Internal — not importable |
 | `github.com/hishamkaram/gismanager/cmd/gismanager` | Full publish-pipeline CLI |
 | `github.com/hishamkaram/gismanager/cmd/layerSchema` | Read-only schema-printing CLI |
@@ -44,38 +44,38 @@ A single Go module at the repo root. No `/v2` semantic-import-versioning suffix 
 
 ## Public API
 
-The lead type is `*ManagerConfig`, constructed via `gismanager.New(opts ...Option)` (functional options — `WithLogger`, `WithGeoserver`, `WithDatastore`, `WithSource`) or the YAML-driven `gismanager.FromConfig(path)`. Methods:
+The lead type is `*publish.Manager`, constructed via `publish.New(opts ...Option)` (functional options — `WithLogger`, `WithGeoserver`, `WithDatastore`, `WithSource`) or the YAML-driven `publish.FromConfig(path)`. Methods:
 
 ```go
 // Build a v2 GeoServer client from the configured endpoint + credentials.
-func (m *ManagerConfig) GetGeoserverCatalog() (*geoserver.Client, error)
+func (m *publish.Manager) GetGeoserverCatalog() (*geoserver.Client, error)
 
 // Open a GIS data source via GDAL. ctx is reserved for cancellation.
-func (m *ManagerConfig) OpenSource(ctx context.Context, path string, access int) (*gdal.DataSource, error)
+func (m *publish.Manager) OpenSource(ctx context.Context, path string, access int) (*gdal.DataSource, error)
 
 // Map a path or connection string to its OGR driver.
-func (m *ManagerConfig) GetDriver(path string) (gdal.OGRDriver, error)
+func (m *publish.Manager) GetDriver(path string) (gdal.OGRDriver, error)
 
 // Copy this GDAL layer into a PostGIS-backed OGR data source.
-func (l *GdalLayer) LayerToPostgis(targetSource *gdal.DataSource, m *ManagerConfig, overwrite bool) (*GdalLayer, error)
+func (l *publish.Layer) LayerToPostgis(targetSource *gdal.DataSource, m *publish.Manager, overwrite bool) (*publish.Layer, error)
 
 // Publish a PostGIS-backed layer as a GeoServer feature type. Idempotent
 // end-to-end (Get + ErrNotFound for workspace, datastore, and feature type).
-func (m *ManagerConfig) PublishGeoserverLayer(ctx context.Context, layer *GdalLayer) error
+func (m *publish.Manager) PublishGeoserverLayer(ctx context.Context, layer *publish.Layer) error
 
 // High-level pipeline: walk → load → publish, with per-file source.Destroy().
 // Iteration is files-outer / layers-inner.
-func (m *ManagerConfig) Walk(ctx context.Context) iter.Seq2[WalkItem, error]
-func (m *ManagerConfig) PublishAll(ctx context.Context) error
+func (m *publish.Manager) Walk(ctx context.Context) iter.Seq2[WalkItem, error]
+func (m *publish.Manager) PublishAll(ctx context.Context) error
 
 // Streaming feature iterator that Destroys each gdal.Feature as iteration
 // advances; replaces the deprecated GetFeatures() []*gdal.Feature shape.
-func (l *GdalLayer) Features(ctx context.Context) iter.Seq[gdal.Feature]
+func (l *publish.Layer) Features(ctx context.Context) iter.Seq[gdal.Feature]
 ```
 
 ### Conversion subsystem (v1.2+ / v1.3+)
 
-A second, **stateless** surface alongside the publish pipeline. No `*ManagerConfig` required — these are top-level package functions that wrap GDAL's command-line workhorses:
+A second, **stateless** surface alongside the publish pipeline. No `*publish.Manager` required — these are top-level package functions that wrap GDAL's command-line workhorses:
 
 ```go
 // v1.2 — format conversion family
@@ -96,11 +96,11 @@ Driver names supplied via the `With<Op>Format` helpers are pre-validated against
 
 All conversion entry points pass paths transparently to GDAL, so any `/vsi*/` prefix (`/vsis3/`, `/vsicurl/`, `/vsimem/`, `/vsizip/`, `/vsigs/`, `/vsiaz/`) works without special handling. Full reference: [`conversions.md`](conversions.md).
 
-All methods that can fail return errors wrapping a sentinel from [`../errors.go`](../errors.go) — see the README's [Errors](../README.md#errors) section for the matching idiom.
+All methods that can fail return errors wrapping a sentinel from [`../errs/errs.go`](../errs/errs.go) — see the README's [Errors](../README.md#errors) section for the matching idiom.
 
 ### Resource lifecycle
 
-`*gdal.DataSource` (returned by [`OpenSource`](../manager.go)) and `gdal.Feature` (yielded by [`Features`](../layer.go)) own CGo-side handles that must be released via `.Destroy()`. The binding does not have a `Close()` method — `Destroy()` is the canonical release primitive in `lukeroth/gdal`.
+`*gdal.DataSource` (returned by [`OpenSource`](../publish/manager.go)) and `gdal.Feature` (yielded by [`Features`](../publish/layer.go)) own CGo-side handles that must be released via `.Destroy()`. The binding does not have a `Close()` method — `Destroy()` is the canonical release primitive in `lukeroth/gdal`.
 
 The library's high-level helpers handle this automatically:
 
@@ -119,7 +119,7 @@ Today the OGR / GDAL bindings don't accept context (no upstream cancellation sur
 
 ## Errors
 
-`errors.go` defines 7 sentinels (`ErrConfigInvalid`, `ErrUnsupportedFormat`, `ErrInvalidLayer`, `ErrInvalidDatasource`, `ErrPostGISConnect`, `ErrGeoServerPublish`, `ErrNoSourcesFound`) and a typed `*GISError` with `Op`, `Source`, `Sentinel`, `Cause` fields. `Unwrap` returns Cause; `Is` matches Sentinel.
+`errs` package defines 7 sentinels (`ErrConfigInvalid`, `ErrUnsupportedFormat`, `ErrInvalidLayer`, `ErrInvalidDatasource`, `ErrPostGISConnect`, `ErrGeoServerPublish`, `ErrNoSourcesFound`) and a typed `*GISError` with `Op`, `Source`, `Sentinel`, `Cause` fields. `Unwrap` returns Cause; `Is` matches Sentinel.
 
 Why both layers: callers can branch by category (`errors.Is(err, ErrPostGISConnect)`) for control flow, *and* extract the underlying `*geoserver.APIError` (or driver-level error) via `errors.As` for diagnostic logging. The same error satisfies both at once.
 
@@ -131,13 +131,13 @@ gismanager: PublishGeoserverLayer "myws/mystore": gismanager: geoserver publish:
 
 ## Logging
 
-`*slog.Logger` directly. No wrapper. The default `gismanager.GetLogger()` returns `slog.New(slog.NewTextHandler(os.Stderr, nil))`; production callers should construct their own `*slog.Logger` (any handler — JSON, lumberjack rotation, otel) and pass it on `ManagerConfig.logger`.
+`*slog.Logger` directly. No wrapper. The default `slogx.Default()` returns `slog.New(slog.NewTextHandler(os.Stderr, nil))`; production callers should construct their own `*slog.Logger` (any handler — JSON, lumberjack rotation, otel) and pass it on `publish.Manager.logger`.
 
 Internal call sites use structured logging — `logger.Error("publish feature type", "workspace", ws, "datastore", ds, "layer", name, "err", err)`. The library emits Debug/Warn/Error only; `cmd/*` may emit Info on successful publish events.
 
 ## Concurrency
 
-`*ManagerConfig` is intended to be read-only after construction. The `logger` field is `*slog.Logger` (concurrency-safe by stdlib contract). The other fields are configuration values that never change.
+`*publish.Manager` is intended to be read-only after construction. The `logger` field is `*slog.Logger` (concurrency-safe by stdlib contract). The other fields are configuration values that never change.
 
 The geoserver/v2 client constructed by `GetGeoserverCatalog` is itself concurrency-safe (the upstream contract — verified in that project's CI under `-race`). gismanager itself doesn't introduce shared mutable state.
 
@@ -178,7 +178,7 @@ gismanager publishes via [`github.com/hishamkaram/geoserver/v2`](https://github.
 | Feature type exists? | `c.FeatureTypes.InWorkspace(ws).InDatastore(ds).Get(ctx, name)` + ErrNotFound |
 | Publish feature type | `c.FeatureTypes.InWorkspace(ws).InDatastore(ds).Create(ctx, &featuretypes.FeatureType{...})` |
 
-The Get + ErrNotFound idiom is what makes the publish flow idempotent end-to-end — see [`../publish_integration_test.go`](../publish_integration_test.go) `TestPublishGeoJSON_Idempotent_Integration`.
+The Get + ErrNotFound idiom is what makes the publish flow idempotent end-to-end — see [`../publish/publish_integration_test.go`](../publish/publish_integration_test.go) `TestPublishGeoJSON_Idempotent_Integration`.
 
 ## Cross-references
 
@@ -186,4 +186,4 @@ The Get + ErrNotFound idiom is what makes the publish flow idempotent end-to-end
 - [`../CHANGELOG.md`](../CHANGELOG.md) — release notes
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — Docker-only dev workflow, PR conventions
 - [`version-compat.md`](version-compat.md) — Go × GeoServer × GDAL × PostGIS matrix
-- [`../publish_integration_test.go`](../publish_integration_test.go) — worked end-to-end example as a test
+- [`../publish/publish_integration_test.go`](../publish/publish_integration_test.go) — worked end-to-end example as a test

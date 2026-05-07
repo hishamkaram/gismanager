@@ -14,7 +14,7 @@ This doc covers two integration patterns:
 
 ## 1. Plain slog
 
-The library default (`gismanager.GetLogger()`) writes text-handler
+The library default (`slogx.Default()`) writes text-handler
 records to stderr with default level filtering. To customize, build
 your own `*slog.Logger` and pass it on construction:
 
@@ -28,7 +28,7 @@ logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
     Level: slog.LevelDebug,
 }))
 
-mgr, _ := gismanager.New(gismanager.WithLogger(logger), /* ... */)
+mgr, _ := publish.New(publish.WithLogger(logger), /* ... */)
 ```
 
 Library log calls follow standard Go conventions — `key`-`value`
@@ -72,7 +72,7 @@ correlate in the backend without any further library changes.
 
 See [`examples/otel_pipeline/`](../examples/otel_pipeline/) — a
 ~120-line `main.go` that wires `otelslog.NewLogger`, the
-`otlploghttp` exporter, and a `*ManagerConfig.PublishAll` call. It
+`otlploghttp` exporter, and a `*publish.Manager.PublishAll` call. It
 lives in its own Go submodule so the OTel SDK + exporter
 dependencies don't leak into gismanager's top-level `go.mod`.
 
