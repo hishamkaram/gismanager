@@ -36,6 +36,14 @@ type Manager struct {
 	Datastore DatastoreConfig `yaml:"datastore"`
 	Source    SourceConfig    `yaml:"source"`
 	logger    *slog.Logger
+
+	// publishConcurrency caps how many GeoServer feature-type
+	// creations [PublishAll] dispatches in parallel. Zero (the
+	// zero-value) means "use [defaultPublishConcurrency]"; an explicit
+	// positive value (set via [WithPublishConcurrency]) overrides.
+	// One means strictly serial publish — useful for diagnostic
+	// runs against finicky GeoServer instances.
+	publishConcurrency int
 }
 
 // Validate checks that every required field on a Manager is set

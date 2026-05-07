@@ -48,6 +48,27 @@ func WithSource(cfg SourceConfig) Option {
 	return func(m *Manager) { m.Source = cfg }
 }
 
+// WithPublishConcurrency caps how many GeoServer feature-type
+// creations [(*Manager).PublishAll] dispatches in parallel. Zero or
+// negative values fall back to the package default
+// ([defaultPublishConcurrency], currently 8). An explicit value of 1
+// forces strictly serial publish — useful for diagnostic runs against
+// finicky GeoServer instances or when GeoServer's own thread pool is
+// the bottleneck.
+//
+// Walk and [(*Layer).LayerToPostgis] always run serially regardless
+// of this option — the lukeroth/gdal CGo handles aren't reentrancy-safe
+// across goroutines. This option only affects the HTTP-only publish step.
+func WithPublishConcurrency(n int) Option {
+	return func(m *Manager) {
+		if n <= 0 {
+			m.publishConcurrency = 0 // signal "use default"
+			return
+		}
+		m.publishConcurrency = n
+	}
+}
+
 // New constructs a [Manager] from the given options. With no options,
 // the returned manager has zero-value GeoServer / Datastore / Source
 // configs and the default logger from [slogx.Default]. The error return is

@@ -220,7 +220,14 @@ func (manager *Manager) PublishAll(ctx context.Context) error {
 	// the concurrency gate; wg ensures we wait for every dispatched
 	// publish before returning. errsMu protects perLayerErrs from
 	// concurrent writes by the publish goroutines.
-	sem := make(chan struct{}, defaultPublishConcurrency)
+	//
+	// Concurrency comes from [WithPublishConcurrency] when set (>0);
+	// otherwise falls back to [defaultPublishConcurrency].
+	concurrency := manager.publishConcurrency
+	if concurrency <= 0 {
+		concurrency = defaultPublishConcurrency
+	}
+	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var errsMu sync.Mutex
 	perLayerErrs := []error{}
