@@ -221,13 +221,6 @@ func (layer *Layer) GeometryName() string {
 	return name
 }
 
-// GetGeomtryName is the historical (typo'd) name of [GeometryName].
-//
-// Deprecated: typo (missing 'e' in "Geometry"). Use [GeometryName],
-// which is byte-for-byte identical in behaviour. The typo'd form is
-// kept for v1.x back-compat and will be removed at v2.
-func (layer *Layer) GetGeomtryName() string { return layer.GeometryName() }
-
 // GetLayerSchema returns the layer's geometry column followed by every
 // attribute field, each as a LayerField with name + OGR type.
 func (layer *Layer) GetLayerSchema() (fields []*LayerField) {
@@ -247,30 +240,6 @@ func (layer *Layer) GetLayerSchema() (fields []*LayerField) {
 			}
 			fields = append(fields, &layerField)
 
-		}
-	}
-	return
-}
-
-// GetFeatures returns every feature in the layer, materialized into a slice.
-// Features are read in OGR-FID order. Returns nil if FeatureCount fails.
-//
-// Deprecated: leaks gdal.Feature handles — each feature in the returned
-// slice owns a C-level handle that must be released via [gdal.Feature.Destroy],
-// which the slice form makes easy to forget. Use [(*Layer).Features]
-// which destroys each feature as iteration advances and on early break.
-func (layer *Layer) GetFeatures() (features []*gdal.Feature) {
-	logger := layer.loggerOrDefault()
-	if layer.Layer != nil {
-		count, ok := layer.FeatureCount(true)
-		if !ok {
-			logger.Error("could not read features")
-		} else {
-			logger.Info("read features", "count", count)
-			for index := 0; index < count; index++ {
-				f := layer.Feature(int64(index))
-				features = append(features, &f)
-			}
 		}
 	}
 	return
