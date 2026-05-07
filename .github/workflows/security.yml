@@ -72,7 +72,16 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
-          category: trivy-image
+          # Single shared category for both Trivy uploads. With distinct
+          # categories ("trivy-image" + "trivy-fs"), GitHub's Code
+          # Scanning aggregator races the slowest job: it samples the
+          # PR's SARIF set at workflow start and fails the meta-check
+          # when one expected category hasn't yet uploaded (the
+          # ~1m40s trivy-image scan loses that race against the
+          # aggregator's 2s evaluation). Consolidating to a single
+          # category avoids the race; findings still surface under
+          # both scans in the Security tab, just grouped together.
+          category: trivy
 
   trivy-fs:
     name: Trivy (repository fs)
@@ -95,4 +104,5 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-fs.sarif
-          category: trivy-fs
+          # See the trivy-image step's category comment for rationale.
+          category: trivy
