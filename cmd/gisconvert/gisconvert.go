@@ -29,8 +29,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hishamkaram/gismanager/cmd/internal/cli"
-	"github.com/hishamkaram/gismanager/convert"
+	"github.com/hishamkaram/gismanager/v2/cmd/internal/cli"
+	"github.com/hishamkaram/gismanager/v2/convert"
 )
 
 func main() { os.Exit(realMain()) }

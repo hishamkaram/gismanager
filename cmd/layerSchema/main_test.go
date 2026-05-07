@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hishamkaram/gismanager/publish"
+	"github.com/hishamkaram/gismanager/v2/publish"
 )
 
 // TestLayerEntryJSON_Shape locks in the on-the-wire shape of the

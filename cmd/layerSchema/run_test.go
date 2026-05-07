@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hishamkaram/gismanager/cmd/internal/cli"
+	"github.com/hishamkaram/gismanager/v2/cmd/internal/cli"
 )
 
 // run-level smoke tests for layerSchema, mirroring the cmd/gismanager

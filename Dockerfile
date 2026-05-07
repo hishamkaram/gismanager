@@ -136,9 +136,9 @@ ARG DATE=unknown
 COPY . /workspace
 RUN set -eux; \
     LDFLAGS="-s -w \
-      -X github.com/hishamkaram/gismanager/cmd/internal/cli.Version=${VERSION} \
-      -X github.com/hishamkaram/gismanager/cmd/internal/cli.Commit=${COMMIT} \
-      -X github.com/hishamkaram/gismanager/cmd/internal/cli.Date=${DATE}"; \
+      -X github.com/hishamkaram/gismanager/v2/cmd/internal/cli.Version=${VERSION} \
+      -X github.com/hishamkaram/gismanager/v2/cmd/internal/cli.Commit=${COMMIT} \
+      -X github.com/hishamkaram/gismanager/v2/cmd/internal/cli.Date=${DATE}"; \
     go mod download; \
     for bin in gismanager layerSchema gisconvert; do \
       go build -trimpath -ldflags="$LDFLAGS" -o "/out/$bin" "./cmd/$bin"; \

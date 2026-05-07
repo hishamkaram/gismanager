@@ -1,4 +1,4 @@
-module github.com/hishamkaram/gismanager
+module github.com/hishamkaram/gismanager/v2
 
 go 1.25.0
 

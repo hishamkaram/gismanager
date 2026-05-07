@@ -7,8 +7,8 @@ import (
 
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
-	"github.com/hishamkaram/gismanager/internal/slogx"
+	"github.com/hishamkaram/gismanager/v2/errs"
+	"github.com/hishamkaram/gismanager/v2/internal/slogx"
 )
 
 // DEMOption configures a [DEMProcessing] call.

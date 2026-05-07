@@ -17,7 +17,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/hishamkaram/gismanager/convert"
+	"github.com/hishamkaram/gismanager/v2/convert"
 )
 
 func main() {

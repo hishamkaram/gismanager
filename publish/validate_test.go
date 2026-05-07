@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
+	"github.com/hishamkaram/gismanager/v2/errs"
 )
 
 // fullConfig returns a Manager with every required field

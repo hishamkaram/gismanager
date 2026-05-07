@@ -13,8 +13,8 @@ import (
 	"github.com/hishamkaram/geoserver/v2/rest/workspaces"
 	"github.com/lukeroth/gdal"
 
-	"github.com/hishamkaram/gismanager/internal/errs"
-	"github.com/hishamkaram/gismanager/internal/slogx"
+	"github.com/hishamkaram/gismanager/v2/errs"
+	"github.com/hishamkaram/gismanager/v2/internal/slogx"
 )
 
 // Layer wraps a *gdal.Layer with the helper methods gismanager uses
