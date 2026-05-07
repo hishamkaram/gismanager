@@ -4,6 +4,165 @@ All notable changes to `github.com/hishamkaram/gismanager` are documented here. 
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-05-07
+
+### Context
+
+The v2 line ships gismanager as a subpackage-organized library
+(`github.com/hishamkaram/gismanager/v2`) with the **publish pipeline**,
+**conversion subsystem**, and the typed-error machinery each living in
+its own subpackage. Six focused PRs (#53–#58) sequenced for review
+delivered the layout; the v1.x line (release branch `release/v1.x`)
+stays maintained for users who can't migrate yet. See
+[`MIGRATING.md`](./MIGRATING.md) for the v1 → v2 import-rewrite recipe.
+
+The v2 cycle is intentionally **structural** rather than feature-driven:
+the library API surface is the same shape gismanager has had since v1.4
+plus a few targeted cleanups and one new option. No new external runtime
+dependencies were added; the dep surface stays the small set documented
+in `CLAUDE.md`.
+
+### Module path
+
+- **`github.com/hishamkaram/gismanager` → `github.com/hishamkaram/gismanager/v2`** (PR #56)
+
+  Every external import requires a path bump; type/function names are
+  otherwise either unchanged or renamed per the table in MIGRATING.md.
+  The release/v1.x branch keeps the old import path supported for
+  patch releases (security fixes, etc.).
+
+### Added
+
+- **`github.com/hishamkaram/gismanager/v2/publish`** (PR #55) —
+  the publish pipeline subpackage. Hosts `Manager` (was `ManagerConfig`),
+  `Layer` (was `GdalLayer`), `New`, `FromConfig`, `WithLogger` /
+  `WithGeoserver` / `WithDatastore` / `WithSource`, `(*Manager).Walk`,
+  `(*Manager).PublishAll`, `(*Manager).OpenSource` / `GetDriver` /
+  `Validate`, `(*Layer).LayerToPostgis` / `PublishGeoserverLayer` /
+  `GetLayerSchema` / `Features` / `GeometryName`, plus the configuration
+  struct types (`GeoserverConfig`, `DatastoreConfig`, `SourceConfig`,
+  `LayerField`, `WalkItem`, `Option`).
+- **`github.com/hishamkaram/gismanager/v2/convert`** (PR #54) —
+  the stateless conversion subsystem subpackage. Hosts `ConvertVector`,
+  `ConvertRaster`, `ToCOG`, `ReprojectRaster`, `Rasterize`, `BuildVRT`,
+  `DEMProcessing`, `ToPMTiles`, plus 60-ish `WithVector*` / `WithRaster*`
+  / `WithRasterize*` / `WithVRT*` / `WithDEM*` / `WithPMTiles*` option
+  helpers. Option types renamed: `VectorConvertOption` → `VectorOption`,
+  `RasterConvertOption` → `RasterOption` (the redundant `Convert`
+  prefix made sense at the root but is noise inside `convert/`).
+- **`github.com/hishamkaram/gismanager/v2/errs`** (PR #56) —
+  promoted from `internal/errs` to a public subpackage. Hosts the
+  `*GISError` envelope and the `ErrConfigInvalid` / `ErrUnsupportedFormat`
+  / `ErrInvalidLayer` / `ErrInvalidDatasource` / `ErrPostGISConnect` /
+  `ErrGeoServerPublish` / `ErrNoSourcesFound` / `ErrConvertFailed`
+  sentinels. v2 callers do `errors.Is(err, errs.ErrConvertFailed)`
+  rather than the v1 `errors.Is(err, gismanager.ErrConvertFailed)`.
+- **`publish.WithPublishConcurrency(n int)`** (PR #58) — caps how
+  many GeoServer feature-type creations `(*Manager).PublishAll`
+  dispatches in parallel. Zero/negative → fall back to package
+  default (currently 8); explicit positive → cap; `n=1` forces
+  strictly serial publish (useful for diagnostic runs against
+  finicky GeoServer instances). Walk + LayerToPostgis stay serial
+  regardless — only the HTTP-only publish step parallelizes, since
+  the lukeroth/gdal CGo handles aren't reentrancy-safe across
+  goroutines.
+- **`MIGRATING.md`** — new top-level migration guide covering the
+  module-path bump, every type/function rename, the dropped
+  v1-deprecated methods, the new option, and concrete `sed`-style
+  migration recipes for typical caller patterns.
+
+### Changed
+
+- **`ManagerConfig` → `Manager`** in `publish/` (PR #55). "Config" was
+  a misnomer — the type IS the manager, not its config. Method sets
+  (`Validate`, `OpenSource`, `GetDriver`, `Walk`, `PublishAll`,
+  `GetGeoserverCatalog`, `NewLayer`) flow with the type.
+- **`GdalLayer` → `Layer`** in `publish/` (PR #55). Drop the redundant
+  `Gdal` prefix — clear from package context. Method sets
+  (`LayerToPostgis`, `PublishGeoserverLayer`, `GetLayerSchema`,
+  `Features`, `GeometryName`) flow with the type.
+- **`*ConvertOption` → `*Option`** in `convert/` (PR #54). `VectorOption`
+  / `RasterOption` (`RasterizeOption` / `VRTOption` / `DEMOption` /
+  `PMTilesOption` were already concise, unchanged).
+- **Internal extraction of error machinery + default logger** to
+  `internal/errs` (Phase 1, PR #53) then promotion of `errs` to
+  public (Phase 4, PR #56). `internal/slogx` stays internal in
+  v2; v2 callers construct their own `*slog.Logger` and pass it
+  via `publish.WithLogger`.
+
+### Removed
+
+- **`gismanager.GISError` / `gismanager.Err*` sentinels** (root) —
+  replaced by `errs.GISError` / `errs.Err*`. Pre-v1.4 callers that
+  matched on string error messages keep working (errors.Is preserves
+  identity across the boundary), but type-name compile-time references
+  must update.
+- **`gismanager.ManagerConfig` / `gismanager.GdalLayer` / `gismanager.New`
+  / `gismanager.FromConfig` / `gismanager.WithLogger` / `gismanager.WithGeoserver`
+  / `gismanager.WithDatastore` / `gismanager.WithSource` / `gismanager.GetGISFiles`
+  / `gismanager.DBIsAlive` / `gismanager.DBIsAliveContext`** (root) —
+  replaced by the `publish.X` equivalents.
+- **`gismanager.ConvertVector` / `gismanager.ConvertRaster` / `gismanager.ToCOG`
+  / `gismanager.ReprojectRaster` / `gismanager.Rasterize` / `gismanager.BuildVRT`
+  / `gismanager.DEMProcessing` / `gismanager.ToPMTiles`** + ~60 root-level
+  `WithX*` helpers — replaced by the `convert.X` equivalents.
+- **`gismanager.GetLogger()`** (root) — dropped from public API.
+  v2 callers construct their own `*slog.Logger` (any handler — text,
+  JSON, OTel-bridged) and pass it via `publish.WithLogger`. The
+  internal default at `internal/slogx.Default` is package-private.
+- **`(*Layer).GetGeomtryName()`** (PR #57) — typo'd duplicate of
+  `GeometryName()`; behaviorally identical but with the typo
+  preserved for v1 back-compat. v2 drops it.
+- **`(*Layer).GetFeatures()`** (PR #57) — returned a slice of
+  `*gdal.Feature` whose elements each owned a C-level handle the
+  caller had to remember to `Destroy`; the slice form made leaks
+  too easy. v2 callers use the `(*Layer).Features(ctx)` iterator
+  instead, which destroys each feature as iteration advances and
+  on early break.
+
+### Tests
+
+- `TestFeatures_Iterator` (publish) — replaces `TestGetFeatures`
+  with the iterator-form contract (PR #57).
+- `TestWithPublishConcurrency_*` (publish, 5 cases) — locks in
+  the option's effect on the manager state across explicit-positive,
+  zero-fallback, negative-fallback, n=1-serial, and unset paths
+  (PR #58).
+- The full integration suite (GeoServer 2.27.4 LTS + 2.28.0 stable,
+  PostGIS 16) ran green at every Phase boundary.
+
+### Operations
+
+- **`release/v1.x` maintenance branch** (PR #52) — branched from
+  `v1.4.1`. Patch releases on the v1.x line (security fixes,
+  CVE patches) cut from this branch. CI workflows (`ci.yml`,
+  `integration.yml`, `security.yml`) trigger on `release/v*` in
+  addition to `master`.
+- **Trivy SARIF aggregator race fix** (PR #56 follow-up) — both
+  Trivy job uploads now share a single `category: trivy` to side-
+  step the Code Scanning aggregator's "missing config" race that
+  fired at workflow start (~2s) when an expected SARIF category
+  hadn't yet uploaded.
+
+### Migration
+
+See [`MIGRATING.md`](./MIGRATING.md). The short version:
+
+```bash
+# 1. Bump every import.
+find . -name '*.go' | xargs sed -i \
+  's|"github.com/hishamkaram/gismanager"|"github.com/hishamkaram/gismanager/v2/publish"|g'
+# (then split: convert/ for ConvertVector etc., errs/ for sentinels)
+
+# 2. Rename Manager / Layer types.
+find . -name '*.go' | xargs sed -i \
+  's/\bgismanager\.ManagerConfig\b/publish.Manager/g; s/\bgismanager\.GdalLayer\b/publish.Layer/g'
+
+# 3. Replace dropped methods.
+#    GetGeomtryName → GeometryName
+#    GetFeatures (slice) → Features(ctx) iterator (use range over the result)
+```
+
 ## [1.4.1] — 2026-05-06
 
 ### Context
