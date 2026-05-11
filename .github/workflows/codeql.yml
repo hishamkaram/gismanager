@@ -43,7 +43,7 @@ jobs:
             echo "apt-get update returned nonzero — proceeding with whatever indexes did fetch"
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             build-essential file git pkg-config
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # CodeQL's tooling (and the Autobuild step) runs git internally;
       # the checkout's directory ownership doesn't match the runner-user
       # inside this container, so git refuses to operate on it
@@ -52,22 +52,22 @@ jobs:
       # https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory
       - name: Trust the checkout directory for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.25"
           check-latest: true
           cache: true
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: go
           queries: security-and-quality
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: /language:go
