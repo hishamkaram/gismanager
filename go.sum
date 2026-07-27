@@ -227,8 +227,8 @@ github.com/prometheus/common v0.67.5 h1:pIgK94WWlQt1WLwAC5j2ynLaBRDiinoAb86HZHTU
 github.com/prometheus/common v0.67.5/go.mod h1:SjE/0MzDEEAyrdr5Gqc6G+sXI67maCxzaT3A2+HqjUw=
 github.com/prometheus/procfs v0.19.2 h1:zUMhqEW66Ex7OXIiDkll3tl9a1ZdilUOd/F6ZXw4Vws=
 github.com/prometheus/procfs v0.19.2/go.mod h1:M0aotyiemPhBCM0z5w87kL22CxfcH05ZpYlu+b4J7mw=
-github.com/protomaps/go-pmtiles v1.30.2 h1:CISZddWvaB9xBOBSEk8YelAsNMNosv/AjsVroO26oA0=
-github.com/protomaps/go-pmtiles v1.30.2/go.mod h1:QpXN5ZtUlrar3rbIyagQRbMBV5i8Cygrk2RUeNEonSM=
+github.com/protomaps/go-pmtiles v1.31.2 h1:xYXagv2oKJarheCdOIGg8MvYRp8Y03MBs9jegxf4NDQ=
+github.com/protomaps/go-pmtiles v1.31.2/go.mod h1:QpXN5ZtUlrar3rbIyagQRbMBV5i8Cygrk2RUeNEonSM=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
